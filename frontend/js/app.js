@@ -162,8 +162,18 @@ function Dashboard({ goTo }) {
 // Route map (simplified linear/branching diagram of zones, SVG)
 // ---------------------------------------------------------------------------
 
+// Laid out as a square: the 4 direct/primary routes form the sides (no
+// overlap), and the 2 "redundant path" routes from seed.py (Zone1-Zone3,
+// Zone2-Zone4) are the diagonals — drawn as curves bowed to opposite
+// corners so they don't overlap each other or the straight sides.
 const ZONE_POS = {
-  "Zone 1": [70, 200], "Zone 2": [260, 100], "Zone 3": [450, 200], "Zone 4": [640, 100],
+  "Zone 1": [160, 90], "Zone 2": [590, 90], "Zone 3": [590, 350], "Zone 4": [160, 350],
+};
+const DIAGONAL_BOW = {
+  "Zone 1|Zone 3": [95, -75],
+  "Zone 3|Zone 1": [95, -75],
+  "Zone 2|Zone 4": [-95, 75],
+  "Zone 4|Zone 2": [-95, 75],
 };
 
 function routeStrokeClass(r) {
@@ -182,20 +192,42 @@ function RouteMapSVG({ routes, highlightPath }) {
     return false;
   };
   return (
-    <svg className="topology-svg" viewBox="0 0 720 260">
+    <svg className="topology-svg" viewBox="0 0 750 440">
       {routes.map((r) => {
         const a = ZONE_POS[r.source], b = ZONE_POS[r.destination];
         if (!a || !b) return null;
         const cls = inHighlight(r.source, r.destination) ? "reroute" : routeStrokeClass(r);
+        const strokeColor = cls === "reroute" ? "#2563eb" : undefined;
+        const strokeW = cls === "reroute" ? 5 : 3;
+        const lineClass = `link-line ${cls === "reroute" ? "" : cls}`;
+        const bow = DIAGONAL_BOW[`${r.source}|${r.destination}`];
         const midX = (a[0] + b[0]) / 2, midY = (a[1] + b[1]) / 2;
+
+        if (bow) {
+          const cx = midX + bow[0], cy = midY + bow[1];
+          return (
+            <g key={r.route_id}>
+              <path d={`M ${a[0]} ${a[1]} Q ${cx} ${cy} ${b[0]} ${b[1]}`}
+                fill="none" className={lineClass} stroke={strokeColor} strokeWidth={strokeW} />
+              <rect x={cx - 36} y={cy - 9} width="72" height="16" rx="8" fill="#ffffff" stroke="#e3e8f0" />
+              <text x={cx} y={cy + 3} className="node-label" textAnchor="middle" fontWeight="600">
+                {r.route_id} · {r.available ? `${r.base_travel_time_min}m` : "BLOCKED"}
+              </text>
+            </g>
+          );
+        }
+        // Straight "side" route — offset the label outward from the square
+        // so it never sits on top of the line itself.
+        const dx = b[0] - a[0], dy = b[1] - a[1];
+        const len = Math.hypot(dx, dy) || 1;
+        const ox = (-dy / len) * 16, oy = (dx / len) * 16;
+        const labelX = midX + ox, labelY = midY + oy;
         return (
           <g key={r.route_id}>
             <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]}
-              className={`link-line ${cls === "reroute" ? "" : cls}`}
-              stroke={cls === "reroute" ? "#2563eb" : undefined}
-              strokeWidth={cls === "reroute" ? 5 : 3} />
-            <rect x={midX - 34} y={midY - 18} width="68" height="16" rx="8" fill="#ffffff" stroke="#e3e8f0" />
-            <text x={midX} y={midY - 6} className="node-label" textAnchor="middle" fontWeight="600">
+              className={lineClass} stroke={strokeColor} strokeWidth={strokeW} />
+            <rect x={labelX - 36} y={labelY - 9} width="72" height="16" rx="8" fill="#ffffff" stroke="#e3e8f0" />
+            <text x={labelX} y={labelY + 3} className="node-label" textAnchor="middle" fontWeight="600">
               {r.route_id} · {r.available ? `${r.base_travel_time_min}m` : "BLOCKED"}
             </text>
           </g>
@@ -203,9 +235,9 @@ function RouteMapSVG({ routes, highlightPath }) {
       })}
       {zones.map((z) => (
         <g key={z}>
-          <circle cx={ZONE_POS[z][0]} cy={ZONE_POS[z][1]} r={26} fill="#ffffff" stroke="#2563eb" strokeWidth="2.5" />
-          <circle cx={ZONE_POS[z][0]} cy={ZONE_POS[z][1]} r={26} fill="#2563eb" opacity="0.08" />
-          <text x={ZONE_POS[z][0]} y={ZONE_POS[z][1] + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#16202e" fontFamily="var(--sans)">
+          <circle cx={ZONE_POS[z][0]} cy={ZONE_POS[z][1]} r={28} fill="#ffffff" stroke="#2563eb" strokeWidth="2.5" />
+          <circle cx={ZONE_POS[z][0]} cy={ZONE_POS[z][1]} r={28} fill="#2563eb" opacity="0.08" />
+          <text x={ZONE_POS[z][0]} y={ZONE_POS[z][1] + 5} textAnchor="middle" fontSize="12" fontWeight="700" fill="#16202e" fontFamily="var(--sans)">
             {z}
           </text>
         </g>
