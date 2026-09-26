@@ -1,0 +1,301 @@
+/* ------------------------------------------------------------------------
+   Smart Transit Communication & Route Management System
+   Visual language: minimalist light dashboard — white surfaces, a single
+   blue for "good/active/info", red for "warning/failed/blocked", used
+   consistently across every panel: topology map, route map, bus cards,
+   alerts, charts.
+   ------------------------------------------------------------------------ */
+
+:root {
+  --bg: #f4f6f9;
+  --panel: #ffffff;
+  --panel-raised: #f7f9fc;
+  --line: #e3e8f0;
+  --text: #16202e;
+  --muted: #6b7789;
+  --accent: #2563eb;
+  --accent-soft: #eaf1fe;
+  --ok: #2563eb;
+  --warn: #e05d44;
+  --fail: #c81e3a;
+  --reroute: #2563eb;
+  --mono: "IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace;
+  --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  height: 100%;
+}
+
+#root { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ---- Top bar ---- */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.topbar .brand {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.topbar .brand-mark {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.topbar h1 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+  letter-spacing: 0.2px;
+  color: var(--text);
+}
+
+.topbar .subtitle {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.topbar .clock {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---- Layout ---- */
+.layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.nav {
+  width: 208px;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+  padding: 16px 0;
+  flex-shrink: 0;
+}
+
+.nav button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  border-left: 3px solid transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-family: var(--sans);
+  cursor: pointer;
+}
+
+.nav button:hover { color: var(--text); background: var(--panel-raised); }
+
+.nav button.active {
+  color: var(--accent);
+  font-weight: 600;
+  border-left-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ---- Cards / panels ---- */
+.grid {
+  display: grid;
+  gap: 16px;
+}
+
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-2 { grid-template-columns: 2fr 1fr; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+
+@media (max-width: 900px) {
+  .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  .grid-2 { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 18px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.panel h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  margin: 0 0 12px 0;
+  font-weight: 700;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stat .value {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.stat .label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.stat.ok .value { color: var(--ok); }
+.stat.warn .value { color: var(--warn); }
+.stat.fail .value { color: var(--fail); }
+
+/* ---- Status dots / pills ---- */
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.fail { background: var(--fail); }
+.dot.reroute { background: var(--reroute); }
+
+.pill {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  border: 1px solid var(--line);
+  background: var(--panel-raised);
+  color: var(--text);
+}
+
+.pill.ok { color: var(--ok); background: var(--accent-soft); border-color: rgba(37,99,235,0.25); }
+.pill.warn { color: var(--warn); background: #fdeee9; border-color: rgba(224,93,68,0.3); }
+.pill.fail { color: var(--fail); background: #fbe6ea; border-color: rgba(200,30,58,0.3); }
+.pill.reroute { color: var(--reroute); background: var(--accent-soft); border-color: rgba(37,99,235,0.3); }
+
+/* ---- Tables / lists ---- */
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th {
+  text-align: left;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--muted);
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-weight: 700;
+}
+td {
+  padding: 10px;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+}
+tr.clickable { cursor: pointer; }
+tr.clickable:hover { background: var(--panel-raised); }
+
+/* ---- Alerts ---- */
+.alert-item {
+  display: flex;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-time { font-family: var(--mono); color: var(--muted); font-size: 11px; white-space: nowrap; }
+
+/* ---- Buttons ---- */
+.btn {
+  font-family: var(--sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.danger:hover { border-color: var(--fail); color: var(--fail); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn.primary:hover { background: #1d4ed8; color: #fff; }
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.controls-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* ---- Topology / route map SVG ---- */
+.topology-svg {
+  width: 100%;
+  height: 460px;
+  background:
+    linear-gradient(var(--panel-raised), var(--panel-raised)),
+    radial-gradient(var(--line) 1px, transparent 1px);
+  background-size: 100% 100%, 22px 22px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.node-label { font-family: var(--mono); font-size: 10px; fill: var(--muted); }
+.link-line { stroke: var(--line); stroke-width: 3; stroke-linecap: round; }
+.link-line.up { stroke: var(--ok); }
+.link-line.degraded { stroke: var(--warn); }
+.link-line.down { stroke: var(--fail); stroke-dasharray: 5 5; }
+
+/* ---- Detail panel / drawer ---- */
+.detail-row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 12.5px; }
+.detail-row .k { color: var(--muted); }
+.detail-row .v { font-family: var(--mono); color: var(--text); }
+
+select, input[type=text] {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-family: var(--sans);
+  font-size: 12.5px;
+}
+
+.muted { color: var(--muted); }
+.section-title { font-size: 18px; font-weight: 700; margin: 0 0 16px 0; }
+.empty-state { color: var(--muted); font-size: 13px; padding: 20px; text-align: center; }
