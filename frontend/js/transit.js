@@ -121,6 +121,12 @@ function display() {
           placeholder="Type route number, e.g. 45 AS"
           autocomplete="off">
 
+        ${routeSearchText.trim() && matchingTrips.length
+          ? `<p class="hint" role="status">
+              ${matchingTrips.length} matching trip${matchingTrips.length === 1 ? '' : 's'} found
+            </p>`
+          : ''}
+
         <label for="trip">Route / direction / trip</label>
         <select id="trip">${choices}</select>
 
