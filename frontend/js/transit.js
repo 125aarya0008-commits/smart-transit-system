@@ -35,13 +35,29 @@ ${(trip?.stop_ids||[]).map((id,i)=>`<li class="${blocked.includes(id)?'skipped':
   <section class="transit-panel"><h2>Data coverage</h2><div class="metrics"><div><b>${feed.stops.length}</b><span>Stops</span></div><div><b>${feed.routes.length}</b><span>Routes</span></div><div><b>${feed.trips.length}</b><span>Trips</span></div></div><p class="hint">Station/stop data, trip order and directions can be imported from an authorized GTFS Schedule ZIP. Static data is a snapshot; automatic real-world changes require a trusted realtime feed and scheduled ingestion.</p><p><b>Data mode:</b> ${esc(mode)}<br><b>Generated:</b> ${esc(feed.metadata?.generated_at||'Not applicable')}</p></section></div></div>`;
   
   document.getElementById('routeSearch').oninput = e => {
+
+  document.getElementById('routeSearch').oninput = e => {
     const search = e.target.value.trim().toLowerCase();
     const dropdown = document.getElementById('trip');
 
-    Array.from(dropdown.options).forEach(option => {
-      const matches = option.textContent.toLowerCase().includes(search);
-      option.hidden = !matches;
-      option.disabled = !matches;
+    const matches = feed.trips.filter(t => {
+      const route = routeFor(t);
+      const routeNumber = String(route?.route_short_name || '');
+      const routeName = String(route?.route_long_name || '');
+
+      return routeNumber.toLowerCase().includes(search) ||
+             routeName.toLowerCase().includes(search);
+    });
+
+    dropdown.innerHTML = matches.map(t =>
+      `<option value="${esc(t.trip_id)}">${esc(routeFor(t)?.route_short_name)} — ${esc(t.trip_id)}</option>`
+    ).join('');
+
+    if (matches.length) {
+      dropdown.value = matches[0].trip_id;
+    }
+  };
+
     });
 
     const firstMatch = Array.from(dropdown.options).find(
