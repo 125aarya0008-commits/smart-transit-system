@@ -65,14 +65,20 @@ function display() {
   }
 
   
+
   const choices = matchingTrips.map(t => {
     const route = routeFor(t);
     const routeNumber = route?.route_short_name || 'Unknown route';
     const routeName = route?.route_long_name || t.trip_id;
 
-    return `<option value="${esc(t.trip_id)}" ${t.trip_id === selectedTrip ? 'selected' : ''}>${esc(routeNumber)} — ${esc(routeName)}</option>`;
-  }).join('');
+    const firstStopId = t.stop_ids?.[0];
+    const lastStopId = t.stop_ids?.at(-1);
 
+    const firstStop = byId(firstStopId)?.stop_name || firstStopId || 'Unknown';
+    const lastStop = byId(lastStopId)?.stop_name || lastStopId || 'Unknown';
+
+    return `<option value="${esc(t.trip_id)}" ${t.trip_id === selectedTrip ? 'selected' : ''}>${esc(routeNumber)} — ${esc(firstStop)} → ${esc(lastStop)}</option>`;
+  }).join('');
 
      const trip = matchingTrips.length     
        ? matchingTrips.find(t => t.trip_id === selectedTrip)     
