@@ -18,7 +18,11 @@ const saveSubscriptions = v =>
   localStorage.setItem('best-subscriptions', JSON.stringify(v));
 
 const byId = id => feed.stops.find(s => s.stop_id === id);
-const routeFor = t => feed.routes.find(r => r.route_id === t.route_id);
+
+const routeFor = t => t
+  ? feed.routes.find(r => r.route_id === t.route_id)
+  : undefined;
+
 
 function detour(trip, blockedIds) {
   const affected = trip.stop_ids.filter(id => blockedIds.includes(id));
