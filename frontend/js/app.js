@@ -75,6 +75,7 @@ const TABS = [
   ["dashboard", "Dashboard"],
   ["buses", "Live Bus Monitoring"],
   ["routes", "Route Management"],
+  ["best", "Mumbai BEST Explorer"],
   ["topology", "Network Topology"],
   ["incidents", "Incident Management"],
   ["alerts", "Alerts"],
@@ -586,81 +587,38 @@ function AlertsPage() {
 // "Canvas is already in use" and crash the React tree — which is what
 // produced the blank/black Network Statistics page. Creating once and
 // calling chart.update() avoids that entirely.
+// Dependency-free charts: no Chart.js canvas lifecycle or CDN requirement.
 function BarChart({ labels, values, label, color }) {
-  const canvasRef = React.useRef(null);
-  const chartRef = React.useRef(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return undefined;
-    chartRef.current = new Chart(canvasRef.current, {
-      type: "bar",
-      data: { labels, datasets: [{ label, data: values, backgroundColor: color, borderRadius: 4, maxBarThickness: 36 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { ticks: { color: "#6b7789" }, grid: { display: false } },
-          y: { ticks: { color: "#6b7789" }, grid: { color: "#e3e8f0" }, beginAtZero: true },
-        },
-      },
-    });
-    return () => {
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-    };
-  }, []); // create exactly once for the life of this canvas
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = color;
-    chart.update();
-  }, [JSON.stringify(labels), JSON.stringify(values), color]);
-
-  return <div style={{ position: "relative", height: 200 }}><canvas ref={canvasRef}></canvas></div>;
+  const nums = values.map(v => Number(v) || 0);
+  const max = Math.max(1, ...nums);
+  if (!labels.length) return <div className="empty-state">No data available.</div>;
+  return <div style={{display:"grid",gap:12,padding:"12px 0"}} aria-label={label}>
+    {labels.map((name,i) => <div key={i} style={{display:"grid",gridTemplateColumns:"minmax(85px, 1fr) 3fr 38px",alignItems:"center",gap:10,fontSize:12}}>
+      <span style={{overflowWrap:"anywhere"}}>{name}</span>
+      <div style={{height:16,background:"#e3e8f0",borderRadius:5,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.max(0,nums[i])/max*100}%`,background:color,borderRadius:5}} /></div>
+      <strong>{nums[i]}</strong>
+    </div>)}
+  </div>;
 }
-
 function DoughnutChart({ labels, values, colors }) {
-  const canvasRef = React.useRef(null);
-  const chartRef = React.useRef(null);
-
-  useEffect(() => {
-    if (!canvasRef.current) return undefined;
-    chartRef.current = new Chart(canvasRef.current, {
-      type: "doughnut",
-      data: { labels, datasets: [{ data: values, backgroundColor: colors, borderColor: "#ffffff", borderWidth: 2 }] },
-      options: {
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: { legend: { position: "bottom", labels: { color: "#16202e", boxWidth: 12, font: { size: 11 } } } },
-      },
-    });
-    return () => {
-      if (chartRef.current) { chartRef.current.destroy(); chartRef.current = null; }
-    };
-  }, []);
-
-  useEffect(() => {
-    const chart = chartRef.current;
-    if (!chart) return;
-    chart.data.labels = labels;
-    chart.data.datasets[0].data = values;
-    chart.data.datasets[0].backgroundColor = colors;
-    chart.update();
-  }, [JSON.stringify(labels), JSON.stringify(values), JSON.stringify(colors)]);
-
-  return <div style={{ position: "relative", height: 200 }}><canvas ref={canvasRef}></canvas></div>;
+  const nums = values.map(v => Math.max(0, Number(v) || 0));
+  const total = nums.reduce((a,b)=>a+b,0);
+  return <div style={{display:"grid",gap:12,padding:"12px 0"}}>
+    {labels.map((name,i) => <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
+      <span style={{width:12,height:12,borderRadius:3,background:colors[i%colors.length],flexShrink:0}} />
+      <span style={{flex:1}}>{name}</span><strong>{nums[i]}</strong><span style={{color:"#6b7789",minWidth:42,textAlign:"right"}}>{total ? Math.round(nums[i]/total*100) : 0}%</span>
+    </div>)}
+  </div>;
 }
 
 function NetworkStatistics() {
-  const [buses] = usePolling(Api.buses, []);
-  const [routes] = usePolling(Api.routes, []);
-  const [network] = usePolling(Api.network, []);
-  const [incidents] = usePolling(Api.incidents, []);
-
-  if (!buses || !routes || !network || !incidents) return <div className="empty-state">Loading statistics…</div>;
+  const [buses, busesError, reloadBuses] = usePolling(Api.buses, []);
+  const [routes, routesError, reloadRoutes] = usePolling(Api.routes, []);
+  const [network, networkError, reloadNetwork] = usePolling(Api.network, []);
+  const [incidents, incidentsError, reloadIncidents] = usePolling(Api.incidents, []);
+  const error = busesError || routesError || networkError || incidentsError;
+  if (error) return <div className="panel"><h2>Network Statistics unavailable</h2><p>Cannot load simulation data from the Render API: {error}</p><p>The original network statistics require the FastAPI backend. The Mumbai BEST Explorer can run without it.</p><button className="btn" onClick={() => {reloadBuses();reloadRoutes();reloadNetwork();reloadIncidents();}}>Retry</button></div>;
+  if (!buses || !routes || !network || !incidents) return <div className="empty-state">Loading statistics from simulation backend…</div>;
 
   const busLabels = buses.map((b) => b.bus_id);
   const busDelays = buses.map((b) => b.delay_minutes);
@@ -671,9 +629,9 @@ function NetworkStatistics() {
   };
 
   const linkStatusCounts = {
-    Up: network.links.filter((l) => l.status === "up").length,
-    Degraded: network.links.filter((l) => l.status === "degraded").length,
-    Down: network.links.filter((l) => l.status === "down").length,
+    Up: (network.links || []).filter((l) => l.status === "up").length,
+    Degraded: (network.links || []).filter((l) => l.status === "degraded").length,
+    Down: (network.links || []).filter((l) => l.status === "down").length,
   };
 
   const incidentTypeCounts = {};
@@ -745,6 +703,12 @@ function ProtocolsPage() {
   );
 }
 
+function BestExplorerPage() {
+  return <div className="panel" style={{padding:0,overflow:"hidden"}}>
+    <iframe title="Mumbai BEST route and stop explorer" src="best-explorer.html" style={{width:"100%",height:"min(1100px, 82vh)",minHeight:650,border:0,display:"block"}} />
+  </div>;
+}
+
 // ---------------------------------------------------------------------------
 // Root app
 // ---------------------------------------------------------------------------
@@ -760,6 +724,7 @@ function App() {
           {tab === "dashboard" && <Dashboard goTo={setTab} />}
           {tab === "buses" && <BusMonitoring />}
           {tab === "routes" && <RouteManagement />}
+          {tab === "best" && <BestExplorerPage />}
           {tab === "topology" && <NetworkTopology />}
           {tab === "incidents" && <IncidentManagement />}
           {tab === "alerts" && <AlertsPage />}
