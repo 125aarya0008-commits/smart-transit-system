@@ -131,3 +131,34 @@ class RouteHistory(Base):
     reason = Column(String)
     added_delay_min = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BestStop(Base):
+    __tablename__ = "best_stops"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stop_id = Column(String, unique=True, index=True, nullable=False)
+    stop_name = Column(String, nullable=False)
+
+
+class BestTrip(Base):
+    __tablename__ = "best_trips"
+
+    id = Column(Integer, primary_key=True, index=True)
+    trip_id = Column(String, unique=True, index=True, nullable=False)
+    route_id = Column(String, index=True, nullable=False)
+    stop_ids_json = Column(String, nullable=False)
+
+
+class BestDisruption(Base):
+    __tablename__ = "best_disruptions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    route_id = Column(String, index=True, nullable=True)
+    stop_id = Column(String, index=True, nullable=True)
+    disruption_type = Column(String, nullable=False)
+    description = Column(String)
+    source = Column(String, default="simulation")
+    status = Column(String, default="active")
+    created_at = Column(DateTime, default=datetime.utcnow)
+
