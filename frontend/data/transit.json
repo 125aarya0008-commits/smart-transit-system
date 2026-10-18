@@ -4,29 +4,39 @@
     "city": "Mumbai",
     "operator": "BEST",
     "mode": "simulation",
-    "source": "Demonstration data"
+    "source": "Illustrative route data, not official BEST",
+    "generated_at": "2026-10-18"
   },
-  "stations": [
+  "stops": [
     {
-      "id": "ST01",
-      "name": "Dadar"
+      "stop_id": "ST01",
+      "stop_name": "Dadar"
     },
     {
-      "id": "ST02",
-      "name": "Worli"
+      "stop_id": "ST02",
+      "stop_name": "Worli"
     },
     {
-      "id": "ST03",
-      "name": "Churchgate"
+      "stop_id": "ST03",
+      "stop_name": "Churchgate"
     }
   ],
   "routes": [
     {
-      "id": "DEMO-01",
-      "name": "Demo Route 1",
-      "stops": ["ST01", "ST02", "ST03"],
-      "status": "simulation"
+      "route_id": "DEMO-01",
+      "route_short_name": "DEMO-01",
+      "route_long_name": "Dadar - Worli - Churchgate (Illustrative)"
     }
   ],
-  "disruptions": []
+  "trips": [
+    {
+      "trip_id": "DEMO-TRIP-01",
+      "route_id": "DEMO-01",
+      "stop_ids": [
+        "ST01",
+        "ST02",
+        "ST03"
+      ]
+    }
+  ]
 }
