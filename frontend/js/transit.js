@@ -33,7 +33,27 @@ ${(trip?.stop_ids||[]).map((id,i)=>`<li class="${blocked.includes(id)?'skipped':
   <section class="transit-panel"><h2>Service changes</h2><p class="hint">Verified alerts require an authenticated operator feed. A simulated disruption can be tested below.</p><div id="issues">${issues.length?issues.map(d=>`<div class="incident"><b>${esc(d.title||'Service disruption')}</b><p>${esc(d.description||'')}</p><small>${esc(d.source||'Simulation')} · ${esc(d.status)}</small></div>`).join(''):'<p>No published disruption in the loaded dataset. This does not confirm that service is normal.</p>'}</div><h3>Rerouting suggestions</h3>${reroute.affected.length?`<p>Affected stops: ${reroute.affected.map(id=>esc(byId(id)?.stop_name||id)).join(', ')}</p>`:'<p>No skipped stops in the loaded scenario.</p>'}${reroute.alternatives.length?reroute.alternatives.map(t=>`<div class="suggestion">Possible alternate route: <b>${esc(routeFor(t)?.route_short_name)}</b><small>Graph-level demo only; operational feasibility not verified</small></div>`).join(''):'<p>No validated alternative route in this dataset. Do not infer a usable detour.</p>'}<div class="actions"><button id="demo">Simulate skipped stop</button><button id="clear" class="outline">Clear demo</button></div></section>
   <section class="transit-panel"><h2>Passenger alerts</h2><p class="hint">Subscribe to a route and boarding stop. In-page alerts work without a backend. System push delivery requires a separate authorized push sender.</p><label for="boarding">Boarding stop</label><select id="boarding">${(trip?.stop_ids||[]).map(id=>`<option value="${esc(id)}" ${id===activeStop?'selected':''}>${esc(byId(id)?.stop_name||id)}</option>`).join('')}</select><div class="actions"><button id="subscribe">Subscribe on this browser</button><button id="permission" class="outline">Enable notifications</button></div><h3>My subscriptions</h3><div id="subscriptions">${subs.length?subs.map(s=>`<div class="subscription">${esc(s.route_id)} · ${esc(byId(s.stop_id)?.stop_name||s.stop_id)} <button class="remove" data-route="${esc(s.route_id)}" data-stop="${esc(s.stop_id)}">Remove</button></div>`).join(''):'No subscriptions yet.'}</div><h3>Relevant alerts</h3><div id="relevant">${subs.flatMap(s=>effectiveDisruptions().filter(d=>d.status==='active'&&(!d.route_id||d.route_id===s.route_id)&& (d.blocked_stop_ids||[]).includes(s.stop_id)).map(d=>`<div class="incident">${esc(d.title)} · ${esc(s.route_id)}<small>${esc(d.source||'Simulation')}</small></div>`)).join('')||'No matching alerts in the loaded dataset.'}</div></section>
   <section class="transit-panel"><h2>Data coverage</h2><div class="metrics"><div><b>${feed.stops.length}</b><span>Stops</span></div><div><b>${feed.routes.length}</b><span>Routes</span></div><div><b>${feed.trips.length}</b><span>Trips</span></div></div><p class="hint">Station/stop data, trip order and directions can be imported from an authorized GTFS Schedule ZIP. Static data is a snapshot; automatic real-world changes require a trusted realtime feed and scheduled ingestion.</p><p><b>Data mode:</b> ${esc(mode)}<br><b>Generated:</b> ${esc(feed.metadata?.generated_at||'Not applicable')}</p></section></div></div>`;
-  document.getElementById('trip').onchange=e=>{selectedTrip=e.target.value;activeStop='';display()};
+  
+  document.getElementById('routeSearch').oninput = e => {
+    const search = e.target.value.trim().toLowerCase();
+    const dropdown = document.getElementById('trip');
+
+    Array.from(dropdown.options).forEach(option => {
+      const matches = option.textContent.toLowerCase().includes(search);
+      option.hidden = !matches;
+      option.disabled = !matches;
+    });
+
+    const firstMatch = Array.from(dropdown.options).find(
+      option => !option.disabled
+    );
+
+    if (firstMatch) {
+      dropdown.value = firstMatch.value;
+      selectedTrip = firstMatch.value;
+    }
+  };
+document.getElementById('trip').onchange=e=>{selectedTrip=e.target.value;activeStop='';display()};
   document.getElementById('boarding').onchange=e=>activeStop=e.target.value;
   document.getElementById('subscribe').onclick=()=>{const s={route_id:trip.route_id,stop_id:document.getElementById('boarding').value};if(!s.stop_id)return;saveSubscriptions([...subs.filter(x=>x.route_id!==s.route_id||x.stop_id!==s.stop_id),s]);display()};
   document.getElementById('permission').onclick=async()=>{if(!('Notification'in window))return alert('Notifications unsupported in this browser');const result=await Notification.requestPermission();alert('Notification permission: '+result+'; remote push delivery is not configured.')};
