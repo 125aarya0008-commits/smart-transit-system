@@ -158,7 +158,13 @@ function display() {
             <li class="${blocked.includes(id) ? 'skipped' : ''}">
               <span>${i + 1}</span>
               <div>
-                <b>${esc(byId(id)?.stop_name || id)}</b>
+                
+<b>
+  ${esc(byId(id)?.stop_name || id)}
+  ${i === 0 ? ' 🟢 START' : ''}
+  ${i === trip.stop_ids.length - 1 ? ' 🔴 END' : ''}
+</b>
+
                 <small>${blocked.includes(id)
                   ? 'Potentially skipped — demo scenario'
                   : 'Stop ID: ' + esc(id)}</small>
