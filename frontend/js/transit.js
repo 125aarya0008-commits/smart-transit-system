@@ -153,25 +153,32 @@ function display() {
         <div class="route-sub">${esc(routeFor(trip)?.route_long_name || '')}</div>
         ${shortRouteWarning}
 
-        <ol class="stop-list">
-          ${(trip?.stop_ids || []).map((id, i) => `
-            <li class="${blocked.includes(id) ? 'skipped' : ''}">
-              <span>${i + 1}</span>
-              <div>
-                
-<b>
-  ${esc(byId(id)?.stop_name || id)}
-  ${i === 0 ? ' 🟢 START' : ''}
-  ${i === trip.stop_ids.length - 1 ? ' 🔴 END' : ''}
-</b>
+       
+<ol class="stop-list">
+  ${(trip?.stop_ids || []).map((id, i, stops) => `
+    <li class="${blocked.includes(id) ? 'skipped' : ''}">
+      <span>${i + 1}</span>
+      <div>
+        <b>${esc(byId(id)?.stop_name || id)}</b>
 
-                <small>${blocked.includes(id)
-                  ? 'Potentially skipped — demo scenario'
-                  : 'Stop ID: ' + esc(id)}</small>
-              </div>
-            </li>
-          `).join('')}
-        </ol>
+        ${i === 0
+          ? '<small style="color:#15803d;font-weight:700;">● START — First recorded stop</small>'
+          : ''}
+
+        ${i === stops.length - 1
+          ? '<small style="color:#dc2626;font-weight:700;">● END — Last recorded stop</small>'
+          : ''}
+
+        <small>
+          ${blocked.includes(id)
+            ? 'Potentially skipped — demo scenario'
+            : 'Stop ID: ' + esc(id)}
+        </small>
+      </div>
+    </li>
+  `).join('')}
+</ol>
+
       </section>
 
       <section class="transit-panel">
