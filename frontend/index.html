@@ -16,8 +16,21 @@
 <body>
   <div id="root"></div>
 
- <script>window.API_BASE = "https://smart-transit-system-jc1l.onrender.com";</script>
-  <script src="js/api.js"></script>
-  <script type="text/babel" data-presets="react" src="js/app.js"></script>
+
+<!-- Smart Transit operating configuration -->
+<script>
+  window.TRANSIT_MODE = "demo";
+  window.API_BASE = "https://smart-transit-system-jc1l.onrender.com";
+</script>
+
+<!-- Local simulation engine: added in the next step -->
+<script src="js/demo.js"></script>
+
+<!-- Unified API layer -->
+<script src="js/api.js"></script>
+
+<!-- Existing React dashboard -->
+<script type="text/babel" data-presets="react" src="js/app.js"></script>
+
 </body>
 </html>
