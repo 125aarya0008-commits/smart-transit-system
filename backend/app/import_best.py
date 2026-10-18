@@ -10,15 +10,8 @@ from pathlib import Path
 from .database import SessionLocal, engine, Base
 from . import models
 
-
-DATA_FILE = (
-    Path(__file__).resolve().parents[2]
-    / "frontend"
-    / "data"
-    / "best-optimized.json"
-)
-
-
+DATA_FILE = Path(__file__).resolve().parent.parent / "best-optimized.json"
+  
 def import_best_data():
     if not DATA_FILE.exists():
         raise FileNotFoundError(
