@@ -1,0 +1,32 @@
+
+{
+  "metadata": {
+    "city": "Mumbai",
+    "operator": "BEST",
+    "mode": "simulation",
+    "source": "Demonstration data"
+  },
+  "stations": [
+    {
+      "id": "ST01",
+      "name": "Dadar"
+    },
+    {
+      "id": "ST02",
+      "name": "Worli"
+    },
+    {
+      "id": "ST03",
+      "name": "Churchgate"
+    }
+  ],
+  "routes": [
+    {
+      "id": "DEMO-01",
+      "name": "Demo Route 1",
+      "stops": ["ST01", "ST02", "ST03"],
+      "status": "simulation"
+    }
+  ],
+  "disruptions": []
+}
