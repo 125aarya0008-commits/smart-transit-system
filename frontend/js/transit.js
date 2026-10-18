@@ -64,7 +64,13 @@ function display() {
     `<option value="${esc(t.trip_id)}" ${t.trip_id === selectedTrip ? 'selected' : ''}>${esc(routeFor(t)?.route_short_name)} — ${esc(t.trip_id)}</option>`
   ).join('');
 
-  const trip = matchingTrips.find(t => t.trip_id === selectedTrip);
+     const trip = matchingTrips.length     
+       ? matchingTrips.find(t => t.trip_id === selectedTrip)     
+       : null;    
+  
+  if (!trip) {     
+    selectedTrip = '';   
+  }
   const issues = effectiveDisruptions().filter(d =>
     d.status === 'active' &&
     (!d.route_id || d.route_id === trip?.route_id)
