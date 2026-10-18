@@ -121,6 +121,10 @@ function display() {
           placeholder="Type route number, e.g. 45 AS"
           autocomplete="off">
 
+        <button type="button" id="clearSearch" class="outline">
+          Clear Search
+        </button>
+
         ${routeSearchText.trim() && matchingTrips.length
           ? `<p class="hint" role="status">
               ${matchingTrips.length} matching trip${matchingTrips.length === 1 ? '' : 's'} found
@@ -256,6 +260,14 @@ function display() {
       </section>
     </div>
   </div>`;
+
+  document.getElementById('clearSearch').onclick = () => {
+    routeSearchText = '';
+    selectedTrip = '';
+    activeStop = '';
+    display();
+    document.getElementById('routeSearch').focus();
+  };
 
   const searchInput = document.getElementById('routeSearch');
   searchInput.value = routeSearchText;
