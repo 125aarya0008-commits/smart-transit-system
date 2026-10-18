@@ -1,5 +1,6 @@
 /* Standalone public transit explorer. Never labels unverified observations as live. */
 const config = window.TRANSIT_CONFIG || {};
+let routeSearchText = '';
 const root = document.getElementById('root');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let feed, disruptions=[], selectedTrip, activeStop='';
@@ -16,7 +17,13 @@ function detour(trip, blockedIds) {
 function effectiveDisruptions(){return [...disruptions,...JSON.parse(localStorage.getItem('best-demo-disruptions')||'[]')];}
 function display(){
   const mode=feed.metadata?.mode||'unverified';
-  const choices=feed.trips.map(t=>`<option value="${esc(t.trip_id)}" ${t.trip_id===selectedTrip?'selected':''}>${esc(routeFor(t)?.route_short_name)} — ${esc(t.trip_id)}</option>`).join('');
+  const matchingTrips = feed.trips.filter(t => {
+  const route = routeFor(t);
+  const query = routeSearchText.trim().toLowerCase();
+  return String(route?.route_short_name || '').toLowerCase().includes(query)
+    || String(route?.route_long_name || '').toLowerCase().includes(query);
+});
+ const choices=matchingTrips.map(t=>`<option value="${esc(t.trip_id)}" ${t.trip_id===selectedTrip?'selected':''}>${esc(routeFor(t)?.route_short_name)} — ${esc(t.trip_id)}</option>`).join('');
   const trip=feed.trips.find(t=>t.trip_id===selectedTrip)||feed.trips[0];selectedTrip=trip?.trip_id;
   const issues=effectiveDisruptions().filter(d=>d.status==='active' && (!d.route_id||d.route_id===trip?.route_id));
   const blocked=[...new Set(issues.flatMap(d=>d.blocked_stop_ids||[]))];
@@ -36,17 +43,32 @@ ${(trip?.stop_ids||[]).map((id,i)=>`<li class="${blocked.includes(id)?'skipped':
   
   document.getElementById('routeSearch').oninput = e => {
 
-  document.getElementById('routeSearch').oninput = e => {
-    const search = e.target.value.trim().toLowerCase();
-    const dropdown = document.getElementById('trip');
+  const searchInput = document.getElementById('routeSearch');
+  searchInput.value = routeSearchText;
+
+  searchInput.oninput = e => {
+    routeSearchText = e.target.value;
 
     const matches = feed.trips.filter(t => {
       const route = routeFor(t);
-      const routeNumber = String(route?.route_short_name || '');
-      const routeName = String(route?.route_long_name || '');
+      const query = routeSearchText.trim().toLowerCase();
 
-      return routeNumber.toLowerCase().includes(search) ||
-             routeName.toLowerCase().includes(search);
+      return String(route?.route_short_name || '').toLowerCase().includes(query)
+        || String(route?.route_long_name || '').toLowerCase().includes(query);
+    });
+
+    if (matches.length) {
+      selectedTrip = matches[0].trip_id;
+      activeStop = '';
+    }
+
+    display();
+
+    const input = document.getElementById('routeSearch');
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+  };
+
     });
 
     dropdown.innerHTML = matches.map(t =>
