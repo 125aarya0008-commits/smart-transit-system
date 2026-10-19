@@ -73,7 +73,7 @@ function TopBar() {
 
 const TABS = [
   ["dashboard", "Dashboard"],
-  ["buses", "Live Bus Monitoring"],
+  ["buses", "BEST Service Monitoring"],
   ["routes", "Route Management"],
   ["best", "Mumbai BEST Explorer"],
   ["topology", "Network Topology"],
@@ -272,65 +272,316 @@ function AlertList({ alerts }) {
 // Live Bus Monitoring
 // ---------------------------------------------------------------------------
 
-function BusMonitoring() {
-  const [buses, , reload] = usePolling(Api.buses, []);
-  const [selected, setSelected] = useState(null);
 
-  const selectedBus = useMemo(
-    () => (buses || []).find((b) => b.bus_id === selected) || null,
-    [buses, selected]
+function BusMonitoring() {
+  const [routes, setRoutes] = useState([]);
+  const [selectedRoute, setSelectedRoute] = useState(null);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const PAGE_SIZE = 30;
+
+  useEffect(() => {
+    let active = true;
+
+    BestData.getRoutes()
+      .then(data => {
+        if (!active) return;
+        setRoutes(data);
+        setLoading(false);
+      })
+      .catch(err => {
+        if (!active) return;
+        setError(err.message);
+        setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    if (!query) return routes;
+
+    return routes.filter(route =>
+      String(route.route_short_name || "")
+        .toLowerCase().includes(query) ||
+      String(route.route_long_name || "")
+        .toLowerCase().includes(query) ||
+      String(route.route_id || "")
+        .toLowerCase().includes(query)
+    );
+  }, [routes, search]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filtered.length / PAGE_SIZE)
   );
 
-  return (
-    <div className="grid grid-2">
+  const visibleRoutes = filtered.slice(
+    (page - 1) * PAGE_SIZE,
+    page * PAGE_SIZE
+  );
+
+  async function selectRoute(routeId) {
+    setSelectedRoute(null);
+
+    try {
+      const details =
+        await BestData.getRouteDetails(routeId);
+
+      setSelectedRoute(details);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  if (loading) {
+    return (
       <div className="panel">
-        <h2>Fleet ({buses ? buses.length : 0})</h2>
-        <table>
-          <thead>
-            <tr><th>Bus</th><th>Route</th><th>Zone</th><th>Delay</th><th>Status</th><th>Link</th></tr>
-          </thead>
-          <tbody>
-            {(buses || []).map((b) => (
-              <tr key={b.bus_id} className="clickable" onClick={() => setSelected(b.bus_id)}>
-                <td>{b.bus_id}</td>
-                <td>{b.route_label}</td>
-                <td>{b.current_zone}</td>
-                <td>{b.delay_minutes}m</td>
-                <td><span className={statusPillClass(b.status)}>{b.status.replace("_", " ")}</span></td>
-                <td><span className={statusPillClass(b.network_connection_status === "connected" ? "operational" : "failed")}>
-                  {b.network_connection_status}
-                </span></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h2>Loading Mumbai BEST services...</h2>
       </div>
+    );
+  }
+
+  if (error) {
+    return (
       <div className="panel">
-        <h2>Bus Detail</h2>
-        {!selectedBus && <div className="empty-state">Select a bus to view details.</div>}
-        {selectedBus && (
-          <div>
-            <div className="detail-row"><span className="k">Bus ID</span><span className="v">{selectedBus.bus_id}</span></div>
-            <div className="detail-row"><span className="k">Current location</span><span className="v">{selectedBus.current_zone}</span></div>
-            <div className="detail-row"><span className="k">Source → Destination</span><span className="v">{selectedBus.source} → {selectedBus.destination}</span></div>
-            <div className="detail-row"><span className="k">Current route</span><span className="v">{selectedBus.route_label}</span></div>
-            <div className="detail-row"><span className="k">Scheduled arrival</span><span className="v">{fmtTime(selectedBus.scheduled_arrival)}</span></div>
-            <div className="detail-row"><span className="k">Estimated arrival</span><span className="v">{fmtTime(selectedBus.estimated_arrival)}</span></div>
-            <div className="detail-row"><span className="k">Delay</span><span className="v">{selectedBus.delay_minutes} min</span></div>
-            <div className="detail-row"><span className="k">Network status</span><span className="v">{selectedBus.network_connection_status}</span></div>
-            <div className="detail-row"><span className="k">Current incident</span><span className="v">{selectedBus.current_incident || "—"}</span></div>
-            <div className="detail-row"><span className="k">Alternative route</span><span className="v">{selectedBus.alternative_route || "—"}</span></div>
-            <div className="controls-row" style={{ marginTop: 14 }}>
-              <button className="btn" onClick={async () => { await Api.simulateDelay(selectedBus.bus_id, 15); reload(); }}>
-                Simulate +15m delay
-              </button>
+        <h2>BEST Data Error</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Mumbai BEST Service Monitoring</h2>
+
+        <p className="muted" style={{ fontSize: 12 }}>
+          Actual BEST route and stop-pattern records.
+          This is not live vehicle tracking.
+        </p>
+
+        <div className="grid grid-4"
+          style={{ marginTop: 16 }}>
+
+          <div className="panel stat ok">
+            <div className="label">BEST ROUTES</div>
+            <div className="value">{routes.length}</div>
+          </div>
+
+          <div className="panel stat">
+            <div className="label">MATCHING ROUTES</div>
+            <div className="value">{filtered.length}</div>
+          </div>
+
+          <div className="panel stat">
+            <div className="label">RECORDED PATTERNS</div>
+            <div className="value">
+              {routes.reduce(
+                (sum, r) => sum + r.trip_pattern_count,
+                0
+              )}
             </div>
           </div>
-        )}
+
+          <div className="panel stat">
+            <div className="label">DATA SOURCE</div>
+            <div className="value"
+              style={{ fontSize: 18 }}>
+              BEST GTFS
+            </div>
+          </div>
+        </div>
+
+        <input
+          type="text"
+          placeholder="Search BEST route number or destination..."
+          value={search}
+          onChange={e => {
+            setSearch(e.target.value);
+            setPage(1);
+          }}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginTop: 16,
+            border: "1px solid #dce3eb",
+            borderRadius: 8
+          }}
+        />
+      </div>
+
+      <div className="grid grid-2">
+        <div className="panel">
+          <h2>BEST Routes ({filtered.length})</h2>
+
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>ROUTE</th>
+                  <th>ROUTE NAME</th>
+                  <th>PATTERNS</th>
+                  <th>STOPS</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {visibleRoutes.map(route => (
+                  <tr
+                    key={route.route_id}
+                    className="clickable"
+                    onClick={() =>
+                      selectRoute(route.route_id)
+                    }
+                  >
+                    <td>
+                      <strong>
+                        {route.route_short_name}
+                      </strong>
+                    </td>
+
+                    <td style={{
+                      fontFamily: "var(--sans)",
+                      fontSize: 12
+                    }}>
+                      {route.route_long_name}
+                    </td>
+
+                    <td>
+                      {route.trip_pattern_count}
+                    </td>
+
+                    <td>
+                      {route.stop_count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="controls-row"
+            style={{
+              marginTop: 16,
+              justifyContent: "space-between"
+            }}>
+
+            <button
+              className="btn"
+              disabled={page === 1}
+              onClick={() => setPage(p => p - 1)}
+            >
+              Previous
+            </button>
+
+            <span className="muted">
+              Page {page} of {totalPages}
+            </span>
+
+            <button
+              className="btn"
+              disabled={page >= totalPages}
+              onClick={() => setPage(p => p + 1)}
+            >
+              Next
+            </button>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h2>BEST Route Details</h2>
+
+          {!selectedRoute && (
+            <div className="empty-state">
+              Select a BEST route to view its stops.
+            </div>
+          )}
+
+          {selectedRoute && (
+            <div>
+              <h2>
+                Route {selectedRoute.route_short_name}
+              </h2>
+
+              <p className="muted">
+                {selectedRoute.route_long_name}
+              </p>
+
+              {selectedRoute.patterns.length === 0 && (
+                <div className="empty-state">
+                  No stop pattern is available for
+                  this route in the dataset.
+                </div>
+              )}
+
+              {selectedRoute.patterns.map(
+                (pattern, index) => (
+                  <div
+                    key={pattern.trip_id || index}
+                    style={{ marginTop: 18 }}
+                  >
+                    <h2>
+                      Pattern {index + 1}
+                      {" · "}
+                      {pattern.stops.length} stops
+                    </h2>
+
+                    <p className="muted"
+                      style={{ fontSize: 12 }}>
+                      Direction: {pattern.direction_id}
+                    </p>
+
+                    <div style={{
+                      maxHeight: 460,
+                      overflowY: "auto"
+                    }}>
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>STOP NAME</th>
+                            <th>STOP ID</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {pattern.stops.map(
+                            (stop, i) => (
+                              <tr key={`${stop.stop_id}-${i}`}>
+                                <td>{i + 1}</td>
+
+                                <td style={{
+                                  fontFamily: "var(--sans)"
+                                }}>
+                                  {stop.stop_name}
+                                </td>
+
+                                <td>{stop.stop_id}</td>
+                              </tr>
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Route Management
