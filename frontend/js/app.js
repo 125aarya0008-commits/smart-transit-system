@@ -684,6 +684,7 @@ function RouteManagement() {
 
     try {
       BestRouting.reset();
+      setBlockedId("");
       setIncident(null);
       setAlternative(null);
 
@@ -1103,19 +1104,38 @@ function RouteManagement() {
             3. Simulate Disruption
           </h2>
 
-          <p>Disrupted Stop</p>
-          <select
-            value={blockedId}
-            onChange={e => setBlockedId(e.target.value)}
-            style={{ width: "100%", padding: 10 }}
-          >
-            {stops.map((s, i) => (
-              <option key={`${s.stop_id}-${i}`}
-                value={s.stop_id}>
-                {i + 1}. {s.stop_name}
-              </option>
-            ))}
-          </select>
+
+<p>Disrupted Stop</p>
+<select
+  value={
+    original?.stops
+      .slice(1, -1)
+      .some(s => s.stop_id === blockedId)
+        ? blockedId
+        : ""
+  }
+  onChange={e => setBlockedId(e.target.value)}
+  style={{ width: "100%", padding: 10 }}
+  disabled={!original}
+>
+  <option value="">
+    {original
+      ? "Select a stop on the original journey"
+      : "Calculate original journey first"}
+  </option>
+
+  {(original?.stops.slice(1, -1) || []).map(
+    (s, i) => (
+      <option
+        key={`${s.stop_id}-${i}`}
+        value={s.stop_id}
+      >
+        {i + 2}. {s.stop_name}
+      </option>
+    )
+  )}
+</select>
+
 
           <p style={{ marginTop: 12 }}>Incident Type</p>
           <select
