@@ -819,70 +819,247 @@ const routeComparison = useMemo(() => {
     setError("");
   }
 
-  function RouteVisualization() {
+  
+function RouteVisualization() {
+  const mapContainerRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+  const layersRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!mapContainerRef.current || !window.L) return;
+
+    // Create the map only once for this component instance.
+    if (!mapRef.current) {
+      const map = window.L.map(mapContainerRef.current, {
+        center: [19.076, 72.8777],
+        zoom: 11,
+        zoomControl: true
+      });
+
+      window.L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19
+        }
+      ).addTo(map);
+
+      mapRef.current = map;
+      layersRef.current = window.L.layerGroup().addTo(map);
+    }
+
+    const map = mapRef.current;
+    const layers = layersRef.current;
+
+    layers.clearLayers();
+
     const originalStops = original?.stops || [];
     const alternativeStops = alternative?.stops || [];
 
-    const all = [...originalStops, ...alternativeStops];
+    const coordinates = [];
 
-    if (!all.length) {
-      return (
-        <div className="empty-state">
-          Calculate a journey to view its route map.
-        </div>
-      );
+    function validCoordinates(stops) {
+      return stops
+        .filter(s =>
+          Number.isFinite(Number(s.lat)) &&
+          Number.isFinite(Number(s.lon))
+        )
+        .map(s => [Number(s.lat), Number(s.lon)]);
     }
 
-    const minLat = Math.min(...all.map(s => s.lat));
-    const maxLat = Math.max(...all.map(s => s.lat));
-    const minLon = Math.min(...all.map(s => s.lon));
-    const maxLon = Math.max(...all.map(s => s.lon));
+    const originalCoords = validCoordinates(originalStops);
+    const alternativeCoords = validCoordinates(alternativeStops);
 
-    const width = 800;
-    const height = 440;
-    const pad = 35;
+    if (originalCoords.length > 1) {
+      window.L.polyline(originalCoords, {
+        color: "#2563eb",
+        weight: 5,
+        opacity: 0.9,
+        dashArray: incident ? "8, 7" : null
+      }).addTo(layers);
 
-    const latRange = Math.max(maxLat - minLat, 0.0001);
-    const lonRange = Math.max(maxLon - minLon, 0.0001);
-    const centerLat = (minLat + maxLat) / 2;
-    const longitudeScale =
-      Math.max(0.1, Math.cos(centerLat * Math.PI / 180));
+      coordinates.push(...originalCoords);
+    }
 
-    const xRange = lonRange * longitudeScale;
-    const yRange = latRange;
-    const scale = Math.min(
-      (width - pad * 2) / xRange,
-      (height - pad * 2) / yRange
-    );
+    if (alternativeCoords.length > 1) {
+      window.L.polyline(alternativeCoords, {
+        color: "#16a34a",
+        weight: 5,
+        opacity: 0.95
+      }).addTo(layers);
 
-    const usedWidth = xRange * scale;
-    const usedHeight = yRange * scale;
-    const offsetX = (width - usedWidth) / 2;
-    const offsetY = (height - usedHeight) / 2;
+      coordinates.push(...alternativeCoords);
+    }
 
-    const point = s => ({
-      x: offsetX +
-        (s.lon - minLon) * longitudeScale * scale,
-      y: height - offsetY -
-        (s.lat - minLat) * scale
+    // Show recorded BEST stops along the original journey.
+    originalStops.forEach((stop, index) => {
+      const lat = Number(stop.lat);
+      const lon = Number(stop.lon);
+
+      if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return;
+      }
+
+      const marker = window.L.circleMarker([lat, lon], {
+        radius: 4,
+        color: "#1d4ed8",
+        fillColor: "#ffffff",
+        fillOpacity: 1,
+        weight: 2
+      });
+
+      // Use a DOM text node rather than inserting stop names
+      // directly as HTML.
+      const popup = document.createElement("div");
+      const heading = document.createElement("strong");
+      heading.textContent = `Original Stop ${index + 1}`;
+      const name = document.createElement("p");
+      name.textContent = stop.stop_name;
+
+      popup.appendChild(heading);
+      popup.appendChild(name);
+
+      marker.bindPopup(popup).addTo(layers);
     });
 
-    const line = items =>
-      items.map(s => {
-        const p = point(s);
-        return `${p.x},${p.y}`;
-      }).join(" ");
+    // Highlight the starting and destination stops.
+    if (originalStops.length) {
+      const endpoints = [
+        {
+          stop: originalStops[0],
+          label: "Journey Start",
+          color: "#16a34a"
+        },
+        {
+          stop: originalStops[originalStops.length - 1],
+          label: "Destination",
+          color: "#7c3aed"
+        }
+      ];
 
-    const start = point(originalStops[0]);
-    const end = point(
-      originalStops[originalStops.length - 1]
-    );
+      endpoints.forEach(({ stop, label, color }) => {
+        const lat = Number(stop.lat);
+        const lon = Number(stop.lon);
 
-    const blockedStop = incident
-      ? originalStops.find(
-          s => s.stop_id === incident.stop_id
-        )
-      : null;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return;
+        }
+
+        window.L.circleMarker([lat, lon], {
+          radius: 9,
+          color: "#ffffff",
+          weight: 2,
+          fillColor: color,
+          fillOpacity: 1
+        })
+          .bindTooltip(label, { direction: "top" })
+          .addTo(layers);
+      });
+    }
+
+    // Mark the simulated flooded or accident-affected stop.
+    if (incident) {
+      const blockedStop = originalStops.find(
+        s => s.stop_id === incident.stop_id
+      );
+
+      if (blockedStop) {
+        const lat = Number(blockedStop.lat);
+        const lon = Number(blockedStop.lon);
+
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+          window.L.circleMarker([lat, lon], {
+            radius: 12,
+            color: "#dc2626",
+            weight: 3,
+            fillColor: "#fecaca",
+            fillOpacity: 0.9
+          })
+            .bindTooltip(
+              `Simulated ${incident.type} disruption`,
+              { permanent: false, direction: "top" }
+            )
+            .addTo(layers);
+        }
+      }
+    }
+
+    if (coordinates.length) {
+      map.fitBounds(window.L.latLngBounds(coordinates), {
+        padding: [35, 35],
+        maxZoom: 15
+      });
+    } else {
+      map.setView([19.076, 72.8777], 11);
+    }
+
+    // Refresh map dimensions after React layout.
+    map.invalidateSize();
+
+  }, [original, alternative, incident]);
+
+  React.useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        layersRef.current = null;
+      }
+    };
+  }, []);
+
+  return (
+    <div>
+      <div
+        className="controls-row"
+        style={{
+          marginBottom: 12,
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 16
+        }}
+      >
+        <span style={{ color: "#2563eb" }}>
+          ● Original BEST journey
+        </span>
+
+        <span style={{ color: "#16a34a" }}>
+          ● Alternative journey
+        </span>
+
+        <span style={{ color: "#dc2626" }}>
+          ● Simulated disruption
+        </span>
+      </div>
+
+      <div
+        ref={mapContainerRef}
+        style={{
+          width: "100%",
+          height: 480,
+          borderRadius: 12,
+          border: "1px solid #e2e8f0",
+          overflow: "hidden",
+          zIndex: 0
+        }}
+      />
+
+      <p className="muted" style={{
+        fontSize: 12,
+        marginTop: 10
+      }}>
+        Mumbai BEST route visualization using actual
+        recorded stop coordinates. Blue indicates the
+        original calculated path; green indicates the
+        alternative. Red indicates a simulated disruption.
+        Lines connect stop locations and do not represent
+        verified road geometry or live bus positions.
+      </p>
+    </div>
+  );
+}
+
 
     return (
       <div>
