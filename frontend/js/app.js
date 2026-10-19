@@ -633,6 +633,39 @@ const routeComparison = useMemo(() => {
   };
 }, [original, alternative]);
 
+  
+const routeComparison = useMemo(() => {
+  if (!original || !alternative) return null;
+
+  const originalIds = original.stops.map(s => s.stop_id);
+  const alternativeIds = alternative.stops.map(s => s.stop_id);
+
+  const originalSet = new Set(originalIds);
+  const alternativeSet = new Set(alternativeIds);
+
+  const skippedStops = original.stops.filter(
+    s => !alternativeSet.has(s.stop_id)
+  );
+
+  const newStops = alternative.stops.filter(
+    s => !originalSet.has(s.stop_id)
+  );
+
+  const sameSequence =
+    originalIds.length === alternativeIds.length &&
+    originalIds.every(
+      (id, i) => id === alternativeIds[i]
+    );
+
+  return {
+    changed: !sameSequence,
+    skippedStops,
+    newStops,
+    distanceDifference:
+      alternative.distance_km - original.distance_km
+  };
+}, [original, alternative]);
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
@@ -1257,6 +1290,86 @@ const routeComparison = useMemo(() => {
               <h2 style={{ marginTop: 16 }}>
                 Alternative Journey
               </h2>
+
+{routeComparison && (
+  <div style={{
+    padding: 14,
+    marginTop: 12,
+    marginBottom: 16,
+    background: "#f8fafc",
+    border: "1px solid #e2e8f0",
+    borderRadius: 10
+  }}>
+    <h3>Original vs Alternative Comparison</h3>
+
+    <p style={{
+      color: routeComparison.changed
+        ? "#15803d"
+        : "#b45309",
+      fontWeight: 600
+    }}>
+      {routeComparison.changed
+        ? "Different stop sequence found"
+        : "No change in stop sequence"}
+    </p>
+
+    <div className="detail-row">
+      <span className="k">Original Stops</span>
+      <span className="v">{original.stops.length}</span>
+    </div>
+
+    <div className="detail-row">
+      <span className="k">Alternative Stops</span>
+      <span className="v">{alternative.stops.length}</span>
+    </div>
+
+    <div className="detail-row">
+      <span className="k">Skipped Stops</span>
+      <span className="v">
+        {routeComparison.skippedStops.length}
+      </span>
+    </div>
+
+    <div className="detail-row">
+      <span className="k">New Stops</span>
+      <span className="v">
+        {routeComparison.newStops.length}
+      </span>
+    </div>
+
+    <div className="detail-row">
+      <span className="k">Distance Difference</span>
+      <span className="v">
+        {routeComparison.distanceDifference.toFixed(2)} km
+      </span>
+    </div>
+
+    <h3 style={{ marginTop: 14 }}>Skipped Stops</h3>
+
+    {routeComparison.skippedStops.length === 0 ? (
+      <p className="muted">None</p>
+    ) : (
+      <ul>
+        {routeComparison.skippedStops.map(s => (
+          <li key={s.stop_id}>{s.stop_name}</li>
+        ))}
+      </ul>
+    )}
+
+    <h3 style={{ marginTop: 14 }}>Newly Used Stops</h3>
+
+    {routeComparison.newStops.length === 0 ? (
+      <p className="muted">None</p>
+    ) : (
+      <ul>
+        {routeComparison.newStops.map(s => (
+          <li key={s.stop_id}>{s.stop_name}</li>
+        ))}
+      </ul>
+    )}
+  </div>
+)}
+
 
               {alternative ? (
                 <>
