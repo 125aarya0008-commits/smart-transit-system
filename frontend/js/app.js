@@ -633,38 +633,6 @@ const routeComparison = useMemo(() => {
   };
 }, [original, alternative]);
 
-  
-const routeComparison = useMemo(() => {
-  if (!original || !alternative) return null;
-
-  const originalIds = original.stops.map(s => s.stop_id);
-  const alternativeIds = alternative.stops.map(s => s.stop_id);
-
-  const originalSet = new Set(originalIds);
-  const alternativeSet = new Set(alternativeIds);
-
-  const skippedStops = original.stops.filter(
-    s => !alternativeSet.has(s.stop_id)
-  );
-
-  const newStops = alternative.stops.filter(
-    s => !originalSet.has(s.stop_id)
-  );
-
-  const sameSequence =
-    originalIds.length === alternativeIds.length &&
-    originalIds.every(
-      (id, i) => id === alternativeIds[i]
-    );
-
-  return {
-    changed: !sameSequence,
-    skippedStops,
-    newStops,
-    distanceDifference:
-      alternative.distance_km - original.distance_km
-  };
-}, [original, alternative]);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
