@@ -1830,494 +1830,524 @@ function RouteVisualization() {
 
 
 function NetworkTopology() {
-  const [loading, setLoading] = React.useState(true);
-  const [error, setError] = React.useState("");
+  const nodes = [
+    { id: "BUS", name: "BEST Bus Gateway", x: 90, y: 200, type: "bus" },
+    { id: "R1", name: "Primary Router", x: 290, y: 85, type: "router" },
+    { id: "R2", name: "Backup Router", x: 290, y: 315, type: "router" },
+    { id: "R3", name: "Core Router", x: 490, y: 200, type: "router" },
+    { id: "SW1", name: "Control Center Switch", x: 660, y: 200, type: "switch" },
+    { id: "SRV", name: "Transit Server", x: 830, y: 125, type: "server" },
+    { id: "DASH", name: "Monitoring Dashboard", x: 830, y: 275, type: "dashboard" }
+  ];
 
-  const [routes, setRoutes] = React.useState([]);
-  const [stops, setStops] = React.useState([]);
-  const [trips, setTrips] = React.useState([]);
+  const links = [
+    { id: "L1", from: "BUS", to: "R1", cost: 10, protocol: "IP" },
+    { id: "L2", from: "BUS", to: "R2", cost: 20, protocol: "IP" },
+    { id: "L3", from: "R1", to: "R3", cost: 10, protocol: "OSPF" },
+    { id: "L4", from: "R2", to: "R3", cost: 10, protocol: "OSPF" },
+    { id: "L5", from: "R1", to: "R2", cost: 30, protocol: "OSPF" },
+    { id: "L6", from: "R3", to: "SW1", cost: 5, protocol: "Ethernet" },
+    { id: "L7", from: "SW1", to: "SRV", cost: 5, protocol: "TCP/IP" },
+    { id: "L8", from: "SW1", to: "DASH", cost: 5, protocol: "HTTPS" }
+  ];
 
-  const [selectedRouteId, setSelectedRouteId] = React.useState("");
-  const [selectedTripId, setSelectedTripId] = React.useState("");
-  const [selectedStopId, setSelectedStopId] = React.useState("");
+  const [failedLinks, setFailedLinks] = React.useState([]);
+  const [selectedLink, setSelectedLink] = React.useState("L3");
+  const [logs, setLogs] = React.useState([
+    "Network initialized. All communication links operational."
+  ]);
 
-  const [blockedStopId, setBlockedStopId] = React.useState("");
-  const [affectedRoutes, setAffectedRoutes] = React.useState([]);
-
-  const mapContainerRef = React.useRef(null);
-  const mapRef = React.useRef(null);
-  const layerRef = React.useRef(null);
-
-  React.useEffect(() => {
-    let cancelled = false;
-
-    async function loadTopology() {
-      try {
-        setLoading(true);
-        setError("");
-
-        if (!window.BestData || !window.BestRouting) {
-          throw new Error("BEST data or routing library is unavailable.");
-        }
-
-        await window.BestData.load();
-        await window.BestRouting.load();
-
-        const [routeData, stopData, tripData] = await Promise.all([
-          window.BestData.getRoutes(),
-          window.BestData.getStops(),
-          window.BestData.getTrips()
-        ]);
-
-        if (cancelled) return;
-
-        const validRoutes = Array.isArray(routeData) ? routeData : [];
-        const validStops = Array.isArray(stopData) ? stopData : [];
-        const validTrips = Array.isArray(tripData) ? tripData : [];
-
-        setRoutes(validRoutes);
-        setStops(validStops);
-        setTrips(validTrips);
-
-        if (validRoutes.length) {
-          setSelectedRouteId(String(validRoutes[0].route_id));
-        }
-
-      } catch (err) {
-        if (!cancelled) {
-          setError(err.message || "Unable to load network topology.");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    loadTopology();
-
-    return () => {
-      cancelled = true;
-    };
+  const nodeLookup = React.useMemo(() => {
+    return Object.fromEntries(nodes.map(n => [n.id, n]));
   }, []);
 
-  const stopLookup = React.useMemo(() => {
-    return new Map(stops.map(stop => [String(stop.stop_id), stop]));
-  }, [stops]);
+  const calculatePath = React.useCallback((start, destination) => {
+    const distances = {};
+    const previous = {};
+    const visited = new Set();
 
-  const routeLookup = React.useMemo(() => {
-    return new Map(routes.map(route => [String(route.route_id), route]));
-  }, [routes]);
-
-  const routeTrips = React.useMemo(() => {
-    return trips.filter(
-      trip => String(trip.route_id) === selectedRouteId
-    );
-  }, [trips, selectedRouteId]);
-
-  React.useEffect(() => {
-    setSelectedTripId(
-      routeTrips.length ? String(routeTrips[0].trip_id) : ""
-    );
-    setSelectedStopId("");
-  }, [routeTrips]);
-
-  const selectedTrip = React.useMemo(() => {
-    return routeTrips.find(
-      trip => String(trip.trip_id) === selectedTripId
-    ) || null;
-  }, [routeTrips, selectedTripId]);
-
-  const tripStops = React.useMemo(() => {
-    if (!selectedTrip || !Array.isArray(selectedTrip.stop_ids)) {
-      return [];
-    }
-
-    return selectedTrip.stop_ids
-      .map(id => stopLookup.get(String(id)))
-      .filter(Boolean);
-  }, [selectedTrip, stopLookup]);
-
-  const selectedRoute = routeLookup.get(selectedRouteId);
-
-  React.useEffect(() => {
-    if (loading || !mapContainerRef.current || !window.L) {
-      return;
-    }
-
-    if (!mapRef.current) {
-      const map = window.L.map(mapContainerRef.current, {
-        center: [19.076, 72.8777],
-        zoom: 11,
-        preferCanvas: true
-      });
-
-      window.L.tileLayer(
-        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-        {
-          attribution:
-            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-          maxZoom: 19
-        }
-      ).addTo(map);
-
-      mapRef.current = map;
-      layerRef.current = window.L.layerGroup().addTo(map);
-    }
-
-    const map = mapRef.current;
-    const layer = layerRef.current;
-
-    layer.clearLayers();
-
-    const coordinates = [];
-
-    tripStops.forEach((stop, index) => {
-      const lat = Number(stop.stop_lat);
-      const lon = Number(stop.stop_lon);
-
-      if (
-        !Number.isFinite(lat) ||
-        !Number.isFinite(lon) ||
-        (lat === 0 && lon === 0)
-      ) {
-        return;
-      }
-
-      coordinates.push([lat, lon]);
-
-      const isBlocked = String(stop.stop_id) === blockedStopId;
-
-      const marker = window.L.circleMarker([lat, lon], {
-        radius: isBlocked ? 10 : 5,
-        color: isBlocked ? "#dc2626" : "#2563eb",
-        weight: 2,
-        fillColor: isBlocked ? "#fecaca" : "#ffffff",
-        fillOpacity: 1
-      });
-
-      const popup = document.createElement("div");
-
-      const title = document.createElement("strong");
-      title.textContent = stop.stop_name || "BEST Stop";
-
-      const detail = document.createElement("p");
-      detail.textContent = `Stop ${index + 1} · ID: ${stop.stop_id}`;
-
-      popup.appendChild(title);
-      popup.appendChild(detail);
-
-      marker.bindPopup(popup).addTo(layer);
+    nodes.forEach(n => {
+      distances[n.id] = Infinity;
+      previous[n.id] = null;
     });
 
-    if (coordinates.length > 1) {
-      window.L.polyline(coordinates, {
-        color: "#2563eb",
-        weight: 4,
-        opacity: 0.85
-      }).addTo(layer);
+    distances[start] = 0;
 
-      map.fitBounds(window.L.latLngBounds(coordinates), {
-        padding: [35, 35],
-        maxZoom: 14
+    while (true) {
+      let current = null;
+      let bestDistance = Infinity;
+
+      nodes.forEach(n => {
+        if (!visited.has(n.id) && distances[n.id] < bestDistance) {
+          current = n.id;
+          bestDistance = distances[n.id];
+        }
       });
-    } else if (coordinates.length === 1) {
-      map.setView(coordinates[0], 14);
+
+      if (current === null) break;
+      if (current === destination) break;
+
+      visited.add(current);
+
+      links.forEach(link => {
+        if (failedLinks.includes(link.id)) return;
+
+        let neighbor = null;
+
+        if (link.from === current) neighbor = link.to;
+        if (link.to === current) neighbor = link.from;
+
+        if (!neighbor || visited.has(neighbor)) return;
+
+        const candidate = distances[current] + link.cost;
+
+        if (candidate < distances[neighbor]) {
+          distances[neighbor] = candidate;
+          previous[neighbor] = current;
+        }
+      });
     }
 
-    map.invalidateSize();
+    if (!Number.isFinite(distances[destination])) {
+      return { path: [], cost: Infinity };
+    }
 
-  }, [loading, tripStops, blockedStopId]);
+    const path = [];
+    let current = destination;
 
-  React.useEffect(() => {
-    return () => {
-      if (mapRef.current) {
-        mapRef.current.remove();
-        mapRef.current = null;
-        layerRef.current = null;
+    while (current !== null) {
+      path.unshift(current);
+      current = previous[current];
+    }
+
+    return { path, cost: distances[destination] };
+  }, [failedLinks]);
+
+  const routeToServer = React.useMemo(() => {
+    return calculatePath("BUS", "SRV");
+  }, [calculatePath]);
+
+  const routeToDashboard = React.useMemo(() => {
+    return calculatePath("BUS", "DASH");
+  }, [calculatePath]);
+
+  const activeLinkIds = React.useMemo(() => {
+    const active = new Set();
+
+    [routeToServer.path, routeToDashboard.path].forEach(path => {
+      for (let i = 0; i < path.length - 1; i++) {
+        const link = links.find(l =>
+          (l.from === path[i] && l.to === path[i + 1]) ||
+          (l.to === path[i] && l.from === path[i + 1])
+        );
+
+        if (link) active.add(link.id);
       }
-    };
-  }, []);
+    });
+
+    return active;
+  }, [routeToServer, routeToDashboard]);
+
+  const addLog = message => {
+    setLogs(prev => [
+      `${new Date().toLocaleTimeString()} — ${message}`,
+      ...prev
+    ].slice(0, 12));
+  };
 
   function simulateFailure() {
-    if (!selectedStopId) return;
+    if (!selectedLink || failedLinks.includes(selectedLink)) return;
 
-    try {
-      // Reset the routing simulation before applying a new failure.
-      window.BestRouting.reset();
-
-      const result = window.BestRouting.blockStop(selectedStopId);
-
-      setBlockedStopId(selectedStopId);
-      setAffectedRoutes(
-        Array.isArray(result?.affected_routes)
-          ? result.affected_routes
-          : []
-      );
-
-      setError("");
-    } catch (err) {
-      setError(err.message || "Could not simulate stop failure.");
-    }
+    setFailedLinks(prev => [...prev, selectedLink]);
+    addLog(
+      `Link ${selectedLink} failed. Recalculating available paths.`
+    );
   }
 
-  function restoreNetwork() {
-    window.BestRouting.reset();
+  function restoreLink() {
+    if (!selectedLink) return;
 
-    setBlockedStopId("");
-    setAffectedRoutes([]);
-    setError("");
+    setFailedLinks(prev => prev.filter(id => id !== selectedLink));
+    addLog(
+      `Link ${selectedLink} restored. Recalculating available paths.`
+    );
+  }
+
+  function restoreAll() {
+    setFailedLinks([]);
+    addLog("All communication links restored.");
+  }
+
+  const protocols = [
+    ["IP", "Logical addressing and packet forwarding"],
+    ["TCP", "Reliable communication for control messages"],
+    ["UDP", "Lightweight transmission of simulated bus telemetry"],
+    ["HTTP/HTTPS", "Communication between dashboard and application server"],
+    ["OSPF", "Proposed dynamic routing protocol for the router network"],
+    ["ICMP", "Connectivity and reachability testing"],
+    ["ARP", "IPv4-to-MAC resolution on local Ethernet segments"],
+    ["Ethernet", "Wired communication between local network devices"]
+  ];
+
+  const operationalLinks = links.length - failedLinks.length;
+  const connected = routeToServer.path.length > 0;
+
+  function nodeFill(type) {
+    if (type === "bus") return "#dbeafe";
+    if (type === "router") return "#e0f2fe";
+    if (type === "switch") return "#fef3c7";
+    if (type === "server") return "#dcfce7";
+    return "#ede9fe";
   }
 
   return (
     <div>
       <div className="panel" style={{ marginBottom: 16 }}>
-        <h2>Mumbai BEST Transport Network Topology</h2>
-
+        <h2>Smart Transit Communication Network Topology</h2>
         <p className="muted">
-          Explore actual recorded BEST stop sequences and
-          simulate a stop becoming unavailable.
-          This is a transport-network simulation, not
-          live bus tracking or physical router monitoring.
+          Hybrid star and partial-mesh architecture with
+          redundant communication paths, simulated link
+          failures and automatic shortest-path recalculation.
         </p>
       </div>
-
-      {error && (
-        <div className="panel" style={{
-          marginBottom: 16,
-          color: "#b91c1c"
-        }}>
-          {error}
-        </div>
-      )}
 
       <div className="grid grid-4" style={{ marginBottom: 16 }}>
         <div className="panel stat ok">
-          <div className="label">BEST ROUTES</div>
-          <div className="value">
-            {loading ? "—" : routes.length.toLocaleString()}
-          </div>
+          <div className="label">NETWORK DEVICES</div>
+          <div className="value">{nodes.length}</div>
+          <div className="label muted">Logical simulation nodes</div>
         </div>
 
         <div className="panel stat">
-          <div className="label">RECORDED STOPS</div>
+          <div className="label">OPERATIONAL LINKS</div>
           <div className="value">
-            {loading ? "—" : stops.length.toLocaleString()}
+            {operationalLinks}/{links.length}
           </div>
+          <div className="label muted">Available connections</div>
         </div>
 
-        <div className="panel stat">
-          <div className="label">TRIP PATTERNS</div>
-          <div className="value">
-            {loading ? "—" : trips.length.toLocaleString()}
-          </div>
+        <div className="panel stat fail">
+          <div className="label">FAILED LINKS</div>
+          <div className="value">{failedLinks.length}</div>
+          <div className="label muted">Simulated failures</div>
         </div>
 
         <div className="panel stat warn">
-          <div className="label">SIMULATED BLOCKED STOPS</div>
-          <div className="value">{blockedStopId ? 1 : 0}</div>
-        </div>
-      </div>
-
-      <div className="panel" style={{ marginBottom: 16 }}>
-        <h2>Select BEST Service</h2>
-
-        <div className="controls-row" style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12
-        }}>
-          <select
-            value={selectedRouteId}
-            onChange={e => {
-              setSelectedRouteId(e.target.value);
-              restoreNetwork();
-            }}
-            disabled={loading}
-          >
-            <option value="">Select BEST route</option>
-            {routes.map(route => (
-              <option key={route.route_id} value={route.route_id}>
-                {route.route_short_name || route.route_id}
-                {" — "}
-                {route.route_long_name || ""}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={selectedTripId}
-            onChange={e => {
-              setSelectedTripId(e.target.value);
-              setSelectedStopId("");
-            }}
-            disabled={!routeTrips.length}
-          >
-            <option value="">Select trip pattern</option>
-            {routeTrips.map((trip, index) => (
-              <option key={trip.trip_id} value={trip.trip_id}>
-                Pattern {index + 1}
-                {" — Direction "}
-                {trip.direction_id ?? "N/A"}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {selectedRoute && (
-          <p className="muted" style={{ marginTop: 12 }}>
-            Selected: {selectedRoute.route_short_name}
-            {" — "}
-            {selectedRoute.route_long_name}
-          </p>
-        )}
-      </div>
-
-      <div className="panel" style={{ marginBottom: 16 }}>
-        <h2>Recorded BEST Stop Connections</h2>
-
-        <p className="muted">
-          Blue lines join consecutive stops in the selected
-          trip pattern. These are geographic connections
-          between stops, not surveyed road alignments.
-        </p>
-
-        {loading ? (
-          <div className="empty-state">
-            Loading BEST network…
+          <div className="label">SERVER CONNECTIVITY</div>
+          <div className="value" style={{ fontSize: 22 }}>
+            {connected ? "CONNECTED" : "OFFLINE"}
           </div>
-        ) : (
-          <div
-            ref={mapContainerRef}
-            style={{
-              width: "100%",
-              height: 480,
-              marginTop: 12,
-              borderRadius: 12,
-              border: "1px solid #e2e8f0",
-              overflow: "hidden",
-              zIndex: 0
-            }}
-          />
-        )}
+          <div className="label muted">
+            Based on calculated path
+          </div>
+        </div>
       </div>
 
       <div className="panel" style={{ marginBottom: 16 }}>
-        <h2>Simulated Stop Failure</h2>
-
+        <h2>Cisco-Style Network Topology</h2>
         <p className="muted">
-          Select a recorded stop to simulate flooding,
-          an accident or another temporary closure.
+          Green: selected communication path · Grey:
+          available standby link · Red dashed: failed link
         </p>
 
-        <div className="controls-row" style={{
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 12
-        }}>
-          <select
-            value={selectedStopId}
-            onChange={e => setSelectedStopId(e.target.value)}
-            disabled={!tripStops.length}
+        <div style={{ overflowX: "auto" }}>
+          <svg
+            viewBox="0 0 940 410"
+            style={{ width: "100%", minWidth: 650 }}
           >
-            <option value="">Select affected stop</option>
-            {tripStops.map((stop, index) => (
-              <option
-                key={`${stop.stop_id}-${index}`}
-                value={stop.stop_id}
-              >
-                {index + 1}. {stop.stop_name}
-              </option>
+            {links.map(link => {
+              const a = nodeLookup[link.from];
+              const b = nodeLookup[link.to];
+
+              const failed = failedLinks.includes(link.id);
+              const active = activeLinkIds.has(link.id);
+
+              const color = failed
+                ? "#dc2626"
+                : active
+                  ? "#16a34a"
+                  : "#94a3b8";
+
+              const mx = (a.x + b.x) / 2;
+              const my = (a.y + b.y) / 2;
+
+              return (
+                <g key={link.id}>
+                  <line
+                    x1={a.x}
+                    y1={a.y}
+                    x2={b.x}
+                    y2={b.y}
+                    stroke={color}
+                    strokeWidth={active ? 5 : 3}
+                    strokeDasharray={failed ? "8 6" : "none"}
+                    opacity={failed ? 0.75 : 1}
+                  />
+
+                  <rect
+                    x={mx - 25}
+                    y={my - 12}
+                    width="50"
+                    height="22"
+                    rx="6"
+                    fill="#ffffff"
+                    stroke="#e2e8f0"
+                  />
+
+                  <text
+                    x={mx}
+                    y={my + 3}
+                    textAnchor="middle"
+                    fontSize="11"
+                    fontWeight="600"
+                    fill={color}
+                  >
+                    {link.id}
+                  </text>
+                </g>
+              );
+            })}
+
+            {nodes.map(node => (
+              <g key={node.id}>
+                <rect
+                  x={node.x - 55}
+                  y={node.y - 24}
+                  width="110"
+                  height="48"
+                  rx="9"
+                  fill={nodeFill(node.type)}
+                  stroke="#2563eb"
+                  strokeWidth="2"
+                />
+
+                <text
+                  x={node.x}
+                  y={node.y - 3}
+                  textAnchor="middle"
+                  fontSize="13"
+                  fontWeight="700"
+                  fill="#1e3a8a"
+                >
+                  {node.id}
+                </text>
+
+                <text
+                  x={node.x}
+                  y={node.y + 11}
+                  textAnchor="middle"
+                  fontSize="9"
+                  fill="#334155"
+                >
+                  {node.name}
+                </text>
+              </g>
             ))}
-          </select>
-
-          <button
-            className="btn danger"
-            disabled={!selectedStopId || loading}
-            onClick={simulateFailure}
-          >
-            Simulate Stop Failure
-          </button>
-
-          <button
-            className="btn"
-            disabled={!blockedStopId}
-            onClick={restoreNetwork}
-          >
-            Restore Stop
-          </button>
+          </svg>
         </div>
+      </div>
 
-        {blockedStopId && (
-          <div style={{ marginTop: 18 }}>
-            <span className="pill fail">
-              ● Simulated stop unavailable
-            </span>
+      <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <div className="panel">
+          <h2>Automatic Rerouting Simulation</h2>
 
-            <p style={{ marginTop: 12 }}>
-              <strong>Affected stop:</strong>{" "}
-              {stopLookup.get(String(blockedStopId))?.stop_name ||
-                blockedStopId}
+          <p className="muted">
+            Select a communication link and simulate its
+            failure. The network automatically calculates
+            another available path using Dijkstra's
+            shortest-path algorithm.
+          </p>
+
+          <div className="controls-row" style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 10,
+            marginTop: 14
+          }}>
+            <select
+              value={selectedLink}
+              onChange={e => setSelectedLink(e.target.value)}
+            >
+              {links.map(link => (
+                <option key={link.id} value={link.id}>
+                  {link.id}: {link.from} ↔ {link.to}
+                </option>
+              ))}
+            </select>
+
+            <button
+              className="btn danger"
+              disabled={failedLinks.includes(selectedLink)}
+              onClick={simulateFailure}
+            >
+              Simulate Link Failure
+            </button>
+
+            <button
+              className="btn"
+              disabled={!failedLinks.includes(selectedLink)}
+              onClick={restoreLink}
+            >
+              Restore Link
+            </button>
+
+            <button className="btn" onClick={restoreAll}>
+              Restore All
+            </button>
+          </div>
+
+          <div style={{ marginTop: 20 }}>
+            <h3>Current Communication Path</h3>
+
+            <p>
+              <strong>Bus → Server:</strong>{" "}
+              {routeToServer.path.length
+                ? routeToServer.path.join(" → ")
+                : "No available path"}
             </p>
 
             <p>
-              <strong>Affected BEST routes:</strong>{" "}
-              {affectedRoutes.length}
+              <strong>Total routing cost:</strong>{" "}
+              {Number.isFinite(routeToServer.cost)
+                ? routeToServer.cost
+                : "∞"}
             </p>
 
-            <div style={{
-              display: "flex",
-              flexWrap: "wrap",
-              gap: 8
-            }}>
-              {affectedRoutes.slice(0, 20).map(routeId => (
-                <span key={routeId} className="pill warn">
-                  {routeLookup.get(String(routeId))
-                    ?.route_short_name || routeId}
-                </span>
-              ))}
-            </div>
-
-            {affectedRoutes.length > 20 && (
-              <p className="muted">
-                Showing the first 20 affected routes.
-              </p>
-            )}
+            <p>
+              <strong>Bus → Dashboard:</strong>{" "}
+              {routeToDashboard.path.length
+                ? routeToDashboard.path.join(" → ")
+                : "No available path"}
+            </p>
           </div>
-        )}
+        </div>
+
+        <div className="panel">
+          <h2>Communication Link Status</h2>
+
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Link</th>
+                  <th>Connection</th>
+                  <th>Cost</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {links.map(link => {
+                  const failed = failedLinks.includes(link.id);
+
+                  return (
+                    <tr key={link.id}>
+                      <td>{link.id}</td>
+                      <td>{link.from} ↔ {link.to}</td>
+                      <td>{link.cost}</td>
+                      <td>
+                        <span className={
+                          failed ? "pill fail" : "pill ok"
+                        }>
+                          {failed ? "FAILED" : "UP"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-2" style={{ marginBottom: 16 }}>
+        <div className="panel">
+          <h2>Routing Event Log</h2>
+
+          {logs.map((log, index) => (
+            <p
+              key={index}
+              style={{
+                padding: "9px 0",
+                borderBottom: "1px solid #e2e8f0",
+                fontSize: 12
+              }}
+            >
+              {log}
+            </p>
+          ))}
+        </div>
+
+        <div className="panel">
+          <h2>Network Routing Explanation</h2>
+
+          <p>
+            <strong>Normal operation:</strong> Communication
+            follows the lowest-cost available path.
+          </p>
+
+          <p>
+            <strong>Link failure:</strong> The failed link is
+            removed from the simulated network graph.
+          </p>
+
+          <p>
+            <strong>Automatic rerouting:</strong> Dijkstra's
+            algorithm recalculates the shortest available
+            communication path.
+          </p>
+
+          <p>
+            <strong>Restoration:</strong> When the link becomes
+            available again, the preferred path is recalculated.
+          </p>
+
+          <p className="muted" style={{ fontSize: 12 }}>
+            This browser simulation illustrates a
+            shortest-path routing concept. Real OSPF
+            requires router configuration and exchanges
+            routing information between network devices.
+          </p>
+        </div>
       </div>
 
       <div className="panel">
-        <h2>Network Analysis</h2>
+        <h2>Communication Protocols Used / Proposed</h2>
 
-        <p>
-          <strong>Selected trip stops:</strong>{" "}
-          {tripStops.length}
-        </p>
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Protocol</th>
+                <th>Purpose in Smart Transit System</th>
+              </tr>
+            </thead>
 
-        <p>
-          <strong>Recorded consecutive connections:</strong>{" "}
-          {Math.max(0, tripStops.length - 1)}
-        </p>
-
-        <p>
-          <strong>Simulation status:</strong>{" "}
-          {blockedStopId
-            ? "One stop blocked in the routing model"
-            : "No stop blocked in this view"}
-        </p>
+            <tbody>
+              {protocols.map(([name, purpose]) => (
+                <tr key={name}>
+                  <td><strong>{name}</strong></td>
+                  <td>{purpose}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <p className="muted" style={{
           marginTop: 12,
           fontSize: 12
         }}>
-          Stop failures are simulated locally. The map
-          shows recorded stop sequences; it does not
-          prove that vehicles can physically divert
-          along an alternative road.
+          Protocol roles describe the proposed system
+          architecture. The browser demo does not run
+          actual OSPF, ICMP, ARP or router hardware.
         </p>
       </div>
     </div>
   );
 }
+
 
 
 // ---------------------------------------------------------------------------
