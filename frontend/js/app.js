@@ -1066,7 +1066,6 @@ async function simulateIncident() {
       );
     }
 
-    // Calculate the current route with existing blockages.
     const before = await BestRouting.findRoute(
       sourceId,
       destinationId
@@ -1078,15 +1077,37 @@ async function simulateIncident() {
       );
     }
 
-    if (!before.stops.some(s => s.stop_id === blockedId)) {
+    const selectedStop = before.stops.find(
+      s => String(s.stop_id) === String(blockedId)
+    );
+
+    if (!selectedStop) {
       throw new Error(
         "Choose a stop on the current available journey."
       );
     }
 
-    // Add another blockage without clearing previous incidents.
     const disruption = await BestRouting.blockStop(blockedId);
 
+    // Store metadata for each simulated incident.
+    if (!window.SmartTransitIncidents) {
+      window.SmartTransitIncidents = {};
+    }
+
+    const incidentDetails = {
+      stop_id: String(blockedId),
+      stop_name: selectedStop.stop_name || String(blockedId),
+      type: incidentType,
+      severity: "High",
+      affected_routes: disruption.affected_routes || [],
+      created_at: new Date().toISOString(),
+      status: "active"
+    };
+
+    window.SmartTransitIncidents[String(blockedId)] =
+      incidentDetails;
+
+    // Recalculate using all active disruptions.
     const after = await BestRouting.findRoute(
       sourceId,
       destinationId
@@ -1095,17 +1116,12 @@ async function simulateIncident() {
     setOriginal(before);
     setAlternative(after);
     setBlockedId("");
-
     setIncident({
       ...disruption,
-      type: incidentType,
-      stop_name:
-        before.stops.find(s => s.stop_id === blockedId)
-          ?.stop_name || blockedId
+      ...incidentDetails
     });
 
   } catch (e) {
-    // Preserve earlier disruptions if a new simulation fails.
     setError(e.message);
   } finally {
     setBusy(false);
