@@ -2619,32 +2619,38 @@ const items = [
     }
   };
 
-  const restoreIncident = async (item) => {
-    try {
-      setBusy(true);
+ 
+const restoreIncident = async (item) => {
+  try {
+    setBusy(true);
+    setError("");
 
-      if (item.disruptionKind === "stop") {
-        window.BestRouting.restoreStop(
-          item.stop_id || item.stopId || item.id
-        );
-      } else if (item.disruptionKind === "connection") {
-        window.BestRouting.restoreConnection(
-          item.from_stop_id || item.from,
-          item.to_stop_id || item.to
-        );
-      } else {
+    if (item.disruptionKind === "stop") {
+      window.BestRouting.restoreStop(item.stopId);
+    } else if (item.disruptionKind === "connection") {
+      const edge = item.edge;
+
+      if (typeof edge !== "string") {
         throw new Error(
-          "Unable to identify this disruption type."
+          "Unsupported connection identifier format."
         );
       }
 
-      refresh();
-    } catch (err) {
-      setError(err.message || "Unable to restore disruption.");
-    } finally {
-      setBusy(false);
+      throw new Error(
+        "Connection restoration requires the edge-key format to be confirmed."
+      );
+    } else {
+      throw new Error("Unknown disruption type.");
     }
-  };
+
+    refresh();
+  } catch (err) {
+    setError(err.message || "Unable to resolve incident.");
+  } finally {
+    setBusy(false);
+  }
+};
+
 
   const stopIncidents = disruptions.filter(
     (item) => item.disruptionKind === "stop"
