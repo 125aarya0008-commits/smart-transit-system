@@ -1062,7 +1062,6 @@ const routeComparison = useMemo(() => {
     setError("");
 
     try {
-
       const before = await BestRouting.findRoute(
         sourceId,
         destinationId
@@ -1103,7 +1102,6 @@ const routeComparison = useMemo(() => {
             ?.stop_name || blockedId
       });
     } catch (e) {
-      BestRouting.reset();
       setError(e.message);
     } finally {
       setBusy(false);
@@ -1388,8 +1386,11 @@ function RouteVisualization() {
           </div>
 
           <div className="panel stat">
-            <div className="label">DISRUPTIONS</div>
-            <div className="value">{incident ? 1 : 0}</div>
+<div className="label">DISRUPTIONS</div>
+<div className="value">
+  {window.BestRouting.getDisruptions().blocked_stops.length +
+   window.BestRouting.getDisruptions().blocked_connections.length}
+</div>
           </div>
         </div>
       </div>
