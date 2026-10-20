@@ -954,8 +954,6 @@ const routeComparison = useMemo(() => {
         }
       })
       .catch(e => setError(e.message));
-
-    return () => BestRouting.reset();
   }, []);
 
   useEffect(() => {
