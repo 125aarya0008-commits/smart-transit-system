@@ -1041,72 +1041,76 @@ const routeComparison = useMemo(() => {
     }
   }
 
-  async function simulateIncident() {
-    if (!sourceId || !destinationId || !blockedId) {
-      setError("Select the required stops.");
-      return;
-    }
-
-    if (
-      blockedId === sourceId ||
-      blockedId === destinationId
-    ) {
-      setError(
-        "Choose a disrupted stop different from " +
-        "the starting and destination stops."
-      );
-      return;
-    }
-
-    setBusy(true);
-    setError("");
-
-    try {
-      const before = await BestRouting.findRoute(
-        sourceId,
-        destinationId
-      );
-
-      if (!before) {
-        throw new Error(
-          "No original path exists between these stops."
-        );
-      }
-
-      if (!before.stops.some(
-        s => s.stop_id === blockedId
-      )) {
-        throw new Error(
-          "The selected stop is not on the original " +
-          "shortest path. Choose a stop from that path."
-        );
-      }
-
-      const disruption = await BestRouting.blockStop(
-        blockedId
-      );
-
-      const after = await BestRouting.findRoute(
-        sourceId,
-        destinationId
-      );
-
-      setOriginal(before);
-      setAlternative(after);
-
-      setIncident({
-        ...disruption,
-        type: incidentType,
-        stop_name:
-          stops.find(s => s.stop_id === blockedId)
-            ?.stop_name || blockedId
-      });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy(false);
-    }
+ 
+async function simulateIncident() {
+  if (!sourceId || !destinationId || !blockedId) {
+    setError("Select the required stops.");
+    return;
   }
+
+  if (blockedId === sourceId || blockedId === destinationId) {
+    setError("Choose a stop other than the start or destination.");
+    return;
+  }
+
+  setBusy(true);
+  setError("");
+
+  try {
+    const existing = BestRouting.getDisruptions();
+    const blocked = existing.blocked_stops || [];
+
+    if (blocked.includes(blockedId)) {
+      throw new Error(
+        "This stop is already blocked. Select a different stop."
+      );
+    }
+
+    // Calculate the current route with existing blockages.
+    const before = await BestRouting.findRoute(
+      sourceId,
+      destinationId
+    );
+
+    if (!before) {
+      throw new Error(
+        "No connected journey is available with the existing disruptions."
+      );
+    }
+
+    if (!before.stops.some(s => s.stop_id === blockedId)) {
+      throw new Error(
+        "Choose a stop on the current available journey."
+      );
+    }
+
+    // Add another blockage without clearing previous incidents.
+    const disruption = await BestRouting.blockStop(blockedId);
+
+    const after = await BestRouting.findRoute(
+      sourceId,
+      destinationId
+    );
+
+    setOriginal(before);
+    setAlternative(after);
+    setBlockedId("");
+
+    setIncident({
+      ...disruption,
+      type: incidentType,
+      stop_name:
+        before.stops.find(s => s.stop_id === blockedId)
+          ?.stop_name || blockedId
+    });
+
+  } catch (e) {
+    // Preserve earlier disruptions if a new simulation fails.
+    setError(e.message);
+  } finally {
+    setBusy(false);
+  }
+}
 
   function restore() {
     BestRouting.reset();
@@ -1499,34 +1503,31 @@ function RouteVisualization() {
 
 <p>Disrupted Stop</p>
 <select
-  value={
-    original?.stops
-      .slice(1, -1)
-      .some(s => s.stop_id === blockedId)
-        ? blockedId
-        : ""
-  }
+  value={blockedId}
   onChange={e => setBlockedId(e.target.value)}
   style={{ width: "100%", padding: 10 }}
   disabled={!original}
 >
   <option value="">
-    {original
-      ? "Select a stop on the original journey"
-      : "Calculate original journey first"}
+    Select a stop to disrupt
   </option>
 
-  {(original?.stops.slice(1, -1) || []).map(
-    (s, i) => (
+  {(alternative?.stops || original?.stops || [])
+    .slice(1, -1)
+    .filter(s =>
+      !BestRouting.getDisruptions()
+        .blocked_stops.includes(s.stop_id)
+    )
+    .map((s, i) => (
       <option
         key={`${s.stop_id}-${i}`}
         value={s.stop_id}
       >
-        {i + 2}. {s.stop_name}
+        {s.stop_name}
       </option>
-    )
-  )}
+    ))}
 </select>
+
 
 
           <p style={{ marginTop: 12 }}>Incident Type</p>
