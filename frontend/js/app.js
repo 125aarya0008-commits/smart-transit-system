@@ -2755,110 +2755,157 @@ const restoreIncident = async (item) => {
       </div>
 
       <div className="panel">
-        <h2>Active Incident Log</h2>
+              
+<h2>Active Incident Log</h2>
 
-        {error && (
-          <p style={{ color: "#b91c1c" }}>
-            {error}
-          </p>
-        )}
+{error && (
+  <p style={{ color: "#b91c1c" }}>
+    {error}
+  </p>
+)}
 
-        {loading ? (
-          <div className="empty-state">
-            Loading simulated disruptions…
-          </div>
-        ) : disruptions.length === 0 ? (
-          <div className="empty-state">
-            No active BEST route disruptions.
+{loading ? (
+  <div className="empty-state">
+    Loading simulated disruptions…
+  </div>
+) : disruptions.length === 0 ? (
+  <div className="empty-state">
+    <p>No active BEST route disruptions.</p>
+    <p>
+      Simulate an accident, flood, or blocked stop
+      in Route Management to create an incident.
+    </p>
+  </div>
+) : (
+  <div style={{ overflowX: "auto" }}>
+    <table>
+      <thead>
+        <tr>
+          <th>Incident Type</th>
+          <th>Affected BEST Stop / Connection</th>
+          <th>Affected Routes</th>
+          <th>Reported At</th>
+          <th>Status</th>
+          <th>Action</th>
+        </tr>
+      </thead>
 
-            <p>
-              Simulate an accident, flood or blocked
-              stop in Route Management, then return
-              here and click Refresh Incidents.
-            </p>
-          </div>
-        ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Type</th>
-                  <th>Affected Stop / Connection</th>
-                  <th>Status</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
+      <tbody>
+        {disruptions.map((item, index) => {
+          const isStop =
+            item.disruptionKind === "stop";
 
-              <tbody>
-                {disruptions.map((item, index) => {
-                  const isStop =
-                    item.disruptionKind === "stop";
+          const stopId = String(
+            item.stopId ||
+            item.stop_id ||
+            item.id ||
+            ""
+          );
 
-                  const description = isStop
-                    ? (
-                        item.stop_name ||
-                        item.stop_id ||
-                        item.stopId ||
-                        item.id ||
-                        "Blocked stop"
-                      )
-                    : (
-                        String(
-                          item.from_stop_id ||
-                          item.from ||
-                          "?"
-                        ) +
-                        " → " +
-                        String(
-                          item.to_stop_id ||
-                          item.to ||
-                          "?"
-                        )
-                      );
+          const metadata = isStop
+            ? window.SmartTransitIncidents?.[stopId]
+            : null;
 
-                  return (
-                    <tr key={index}>
-                      <td>
-                        {isStop
-                          ? "Blocked Stop"
-                          : "Blocked Connection"}
-                      </td>
+          const incidentType = metadata?.type
+            ? metadata.type.charAt(0).toUpperCase() +
+              metadata.type.slice(1)
+            : isStop
+              ? "Blocked Stop"
+              : "Blocked Connection";
 
-                      <td>{description}</td>
+          const stopName = isStop
+            ? (
+                metadata?.stop_name ||
+                item.stop_name ||
+                stopId
+              )
+            : String(item.edge || "Blocked connection");
 
-                      <td>
-                        <span
-                          style={{
-                            background: "#fef3c7",
-                            color: "#92400e",
-                            padding: "5px 10px",
-                            borderRadius: 20,
-                            fontSize: 12,
-                            fontWeight: 600
-                          }}
-                        >
-                          ACTIVE
-                        </span>
-                      </td>
+          const affectedRoutes =
+            metadata?.affected_routes || [];
 
-                      <td>
-                        <button
-                          className="btn"
-                          disabled={busy}
-                          onClick={() =>
-                            restoreIncident(item)
-                          }
-                        >
-                          Resolve
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+          const reportedAt = metadata?.created_at
+            ? new Date(
+                metadata.created_at
+              ).toLocaleString("en-IN")
+            : "Not recorded";
+
+          return (
+            <tr key={isStop ? stopId : String(item.edge || index)}>
+              <td>
+                <strong>{incidentType}</strong>
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "#64748b",
+                    marginTop: 4
+                  }}
+                >
+                  SIMULATED
+                </div>
+              </td>
+
+              <td>
+                <strong>{stopName}</strong>
+
+                {isStop && metadata?.stop_name && (
+                  <div
+                    style={{
+                      fontSize: 12,
+                      color: "#64748b",
+                      marginTop: 4
+                    }}
+                  >
+                    Stop ID: {stopId}
+                  </div>
+                )}
+              </td>
+
+              <td>
+                {isStop && metadata ? (
+                  <span>
+                    {affectedRoutes.length} route(s)
+                  </span>
+                ) : (
+                  "Not available"
+                )}
+              </td>
+
+              <td style={{ fontSize: 12 }}>
+                {reportedAt}
+              </td>
+
+              <td>
+                <span
+                  style={{
+                    background: "#fef3c7",
+                    color: "#92400e",
+                    padding: "5px 10px",
+                    borderRadius: 20,
+                    fontSize: 12,
+                    fontWeight: 600
+                  }}
+                >
+                  ACTIVE
+                </span>
+              </td>
+
+              <td>
+                <button
+                  className="btn"
+                  disabled={busy}
+                  onClick={() => restoreIncident(item)}
+                >
+                  Resolve
+                </button>
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  </div>
+)}
       </div>
     </div>
   );
