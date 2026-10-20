@@ -2569,18 +2569,18 @@ function IncidentManagement() {
         const result = window.BestRouting.getDisruptions();
 
         if (!cancelled) {
-          const items = Array.isArray(result)
-            ? result
-            : [
-                ...(result?.stops || []).map((item) => ({
-                  ...item,
-                  disruptionKind: "stop"
-                })),
-                ...(result?.connections || []).map((item) => ({
-                  ...item,
-                  disruptionKind: "connection"
-                }))
-              ];
+        
+const items = [
+  ...(result.blocked_stops || []).map((stopId) => ({
+    stopId: String(stopId),
+    disruptionKind: "stop"
+  })),
+  ...(result.blocked_connections || []).map((edge) => ({
+    edge,
+    disruptionKind: "connection"
+  }))
+];
+
 
           setDisruptions(items);
         }
