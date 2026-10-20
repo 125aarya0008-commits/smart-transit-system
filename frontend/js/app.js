@@ -1062,7 +1062,6 @@ const routeComparison = useMemo(() => {
     setError("");
 
     try {
-      BestRouting.reset();
 
       const before = await BestRouting.findRoute(
         sourceId,
@@ -3626,23 +3625,43 @@ function BestExplorerPage() {
 // ---------------------------------------------------------------------------
 // Root app
 // ---------------------------------------------------------------------------
-
+ 
 function App() {
   const [tab, setTab] = useState("dashboard");
+
   return (
     <React.Fragment>
       <TopBar />
+
       <div className="layout">
         <Nav tab={tab} setTab={setTab} />
+
         <div className="main">
-          {tab === "dashboard" && <Dashboard goTo={setTab} />}
+          {tab === "dashboard" && (
+            <Dashboard goTo={setTab} />
+          )}
+
           {tab === "buses" && <BusMonitoring />}
-          {tab === "routes" && <RouteManagement />}
+
+          {/* Keep Route Management mounted to preserve its state */}
+          <div
+            style={{
+              display: tab === "routes" ? "block" : "none"
+            }}
+          >
+            <RouteManagement />
+          </div>
+
           {tab === "best" && <BestExplorerPage />}
+
           {tab === "topology" && <NetworkTopology />}
+
           {tab === "incidents" && <IncidentManagement />}
+
           {tab === "alerts" && <AlertsPage />}
+
           {tab === "stats" && <NetworkStatistics />}
+
           {tab === "protocols" && <ProtocolsPage />}
         </div>
       </div>
@@ -3650,4 +3669,6 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+ReactDOM.createRoot(
+  document.getElementById("root")
+).render(<App />);
