@@ -1828,95 +1828,497 @@ function RouteVisualization() {
 // Network Topology
 // ---------------------------------------------------------------------------
 
+
 function NetworkTopology() {
-  const [network, , reload] = usePolling(Api.network, []);
-  const [selectedLink, setSelectedLink] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
 
-  if (!network) return <div className="empty-state">Loading topology…</div>;
-  const { nodes, links, summary } = network;
-  const nodeMap = Object.fromEntries(nodes.map((n) => [n.node_id, n]));
+  const [routes, setRoutes] = React.useState([]);
+  const [stops, setStops] = React.useState([]);
+  const [trips, setTrips] = React.useState([]);
 
-  function nodeColor(status) {
-    return status === "operational" ? "#2563eb" : status === "warning" ? "#e05d44" : "#c81e3a";
+  const [selectedRouteId, setSelectedRouteId] = React.useState("");
+  const [selectedTripId, setSelectedTripId] = React.useState("");
+  const [selectedStopId, setSelectedStopId] = React.useState("");
+
+  const [blockedStopId, setBlockedStopId] = React.useState("");
+  const [affectedRoutes, setAffectedRoutes] = React.useState([]);
+
+  const mapContainerRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+  const layerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadTopology() {
+      try {
+        setLoading(true);
+        setError("");
+
+        if (!window.BestData || !window.BestRouting) {
+          throw new Error("BEST data or routing library is unavailable.");
+        }
+
+        await window.BestData.load();
+        await window.BestRouting.load();
+
+        const [routeData, stopData, tripData] = await Promise.all([
+          window.BestData.getRoutes(),
+          window.BestData.getStops(),
+          window.BestData.getTrips()
+        ]);
+
+        if (cancelled) return;
+
+        const validRoutes = Array.isArray(routeData) ? routeData : [];
+        const validStops = Array.isArray(stopData) ? stopData : [];
+        const validTrips = Array.isArray(tripData) ? tripData : [];
+
+        setRoutes(validRoutes);
+        setStops(validStops);
+        setTrips(validTrips);
+
+        if (validRoutes.length) {
+          setSelectedRouteId(String(validRoutes[0].route_id));
+        }
+
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load network topology.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadTopology();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const stopLookup = React.useMemo(() => {
+    return new Map(stops.map(stop => [String(stop.stop_id), stop]));
+  }, [stops]);
+
+  const routeLookup = React.useMemo(() => {
+    return new Map(routes.map(route => [String(route.route_id), route]));
+  }, [routes]);
+
+  const routeTrips = React.useMemo(() => {
+    return trips.filter(
+      trip => String(trip.route_id) === selectedRouteId
+    );
+  }, [trips, selectedRouteId]);
+
+  React.useEffect(() => {
+    setSelectedTripId(
+      routeTrips.length ? String(routeTrips[0].trip_id) : ""
+    );
+    setSelectedStopId("");
+  }, [routeTrips]);
+
+  const selectedTrip = React.useMemo(() => {
+    return routeTrips.find(
+      trip => String(trip.trip_id) === selectedTripId
+    ) || null;
+  }, [routeTrips, selectedTripId]);
+
+  const tripStops = React.useMemo(() => {
+    if (!selectedTrip || !Array.isArray(selectedTrip.stop_ids)) {
+      return [];
+    }
+
+    return selectedTrip.stop_ids
+      .map(id => stopLookup.get(String(id)))
+      .filter(Boolean);
+  }, [selectedTrip, stopLookup]);
+
+  const selectedRoute = routeLookup.get(selectedRouteId);
+
+  React.useEffect(() => {
+    if (loading || !mapContainerRef.current || !window.L) {
+      return;
+    }
+
+    if (!mapRef.current) {
+      const map = window.L.map(mapContainerRef.current, {
+        center: [19.076, 72.8777],
+        zoom: 11,
+        preferCanvas: true
+      });
+
+      window.L.tileLayer(
+        "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        {
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+          maxZoom: 19
+        }
+      ).addTo(map);
+
+      mapRef.current = map;
+      layerRef.current = window.L.layerGroup().addTo(map);
+    }
+
+    const map = mapRef.current;
+    const layer = layerRef.current;
+
+    layer.clearLayers();
+
+    const coordinates = [];
+
+    tripStops.forEach((stop, index) => {
+      const lat = Number(stop.stop_lat);
+      const lon = Number(stop.stop_lon);
+
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        (lat === 0 && lon === 0)
+      ) {
+        return;
+      }
+
+      coordinates.push([lat, lon]);
+
+      const isBlocked = String(stop.stop_id) === blockedStopId;
+
+      const marker = window.L.circleMarker([lat, lon], {
+        radius: isBlocked ? 10 : 5,
+        color: isBlocked ? "#dc2626" : "#2563eb",
+        weight: 2,
+        fillColor: isBlocked ? "#fecaca" : "#ffffff",
+        fillOpacity: 1
+      });
+
+      const popup = document.createElement("div");
+
+      const title = document.createElement("strong");
+      title.textContent = stop.stop_name || "BEST Stop";
+
+      const detail = document.createElement("p");
+      detail.textContent = `Stop ${index + 1} · ID: ${stop.stop_id}`;
+
+      popup.appendChild(title);
+      popup.appendChild(detail);
+
+      marker.bindPopup(popup).addTo(layer);
+    });
+
+    if (coordinates.length > 1) {
+      window.L.polyline(coordinates, {
+        color: "#2563eb",
+        weight: 4,
+        opacity: 0.85
+      }).addTo(layer);
+
+      map.fitBounds(window.L.latLngBounds(coordinates), {
+        padding: [35, 35],
+        maxZoom: 14
+      });
+    } else if (coordinates.length === 1) {
+      map.setView(coordinates[0], 14);
+    }
+
+    map.invalidateSize();
+
+  }, [loading, tripStops, blockedStopId]);
+
+  React.useEffect(() => {
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        layerRef.current = null;
+      }
+    };
+  }, []);
+
+  function simulateFailure() {
+    if (!selectedStopId) return;
+
+    try {
+      // Reset the routing simulation before applying a new failure.
+      window.BestRouting.reset();
+
+      const result = window.BestRouting.blockStop(selectedStopId);
+
+      setBlockedStopId(selectedStopId);
+      setAffectedRoutes(
+        Array.isArray(result?.affected_routes)
+          ? result.affected_routes
+          : []
+      );
+
+      setError("");
+    } catch (err) {
+      setError(err.message || "Could not simulate stop failure.");
+    }
+  }
+
+  function restoreNetwork() {
+    window.BestRouting.reset();
+
+    setBlockedStopId("");
+    setAffectedRoutes([]);
+    setError("");
   }
 
   return (
     <div>
-      <div className="grid grid-4" style={{ marginBottom: 16 }}>
-        <div className="panel stat ok"><div className="label">ACTIVE ROUTERS</div><div className="value">{summary.active_routers}</div></div>
-        <div className="panel stat ok"><div className="label">ACTIVE SWITCHES</div><div className="value">{summary.active_switches}</div></div>
-        <div className="panel stat fail"><div className="label">FAILED LINKS</div><div className="value">{summary.failed_links}</div></div>
-        <div className="panel stat warn"><div className="label">AVG PACKET LOSS</div><div className="value">{summary.avg_packet_loss_pct}%</div></div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Mumbai BEST Transport Network Topology</h2>
+
+        <p className="muted">
+          Explore actual recorded BEST stop sequences and
+          simulate a stop becoming unavailable.
+          This is a transport-network simulation, not
+          live bus tracking or physical router monitoring.
+        </p>
       </div>
-      <div className="grid grid-2">
-        <div className="panel">
-          <h2>Cisco Packet Tracer Topology (simulated)</h2>
-          <svg className="topology-svg" viewBox="0 0 800 440">
-            {links.map((l) => {
-              const a = nodeMap[l.source_node_id], b = nodeMap[l.dest_node_id];
-              if (!a || !b) return null;
-              const cls = l.status === "up" ? "up" : l.status === "degraded" ? "degraded" : "down";
-              return (
-                <line key={l.link_id} x1={a.x} y1={a.y} x2={b.x} y2={b.y} className={`link-line ${cls}`} />
-              );
-            })}
-            {nodes.map((n) => (
-              <g key={n.node_id}>
-                <rect x={n.x - 28} y={n.y - 17} width="56" height="34" rx="6"
-                  fill="#ffffff" stroke={nodeColor(n.status)} strokeWidth="2" />
-                <text x={n.x} y={n.y + 4} textAnchor="middle" fontSize="11" fontWeight="700" fill="#16202e" fontFamily="var(--sans)">{n.node_id}</text>
-                <text x={n.x} y={n.y + 31} textAnchor="middle" className="node-label" fontSize="9">{n.zone}</text>
-              </g>
+
+      {error && (
+        <div className="panel" style={{
+          marginBottom: 16,
+          color: "#b91c1c"
+        }}>
+          {error}
+        </div>
+      )}
+
+      <div className="grid grid-4" style={{ marginBottom: 16 }}>
+        <div className="panel stat ok">
+          <div className="label">BEST ROUTES</div>
+          <div className="value">
+            {loading ? "—" : routes.length.toLocaleString()}
+          </div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">RECORDED STOPS</div>
+          <div className="value">
+            {loading ? "—" : stops.length.toLocaleString()}
+          </div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">TRIP PATTERNS</div>
+          <div className="value">
+            {loading ? "—" : trips.length.toLocaleString()}
+          </div>
+        </div>
+
+        <div className="panel stat warn">
+          <div className="label">SIMULATED BLOCKED STOPS</div>
+          <div className="value">{blockedStopId ? 1 : 0}</div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Select BEST Service</h2>
+
+        <div className="controls-row" style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12
+        }}>
+          <select
+            value={selectedRouteId}
+            onChange={e => {
+              setSelectedRouteId(e.target.value);
+              restoreNetwork();
+            }}
+            disabled={loading}
+          >
+            <option value="">Select BEST route</option>
+            {routes.map(route => (
+              <option key={route.route_id} value={route.route_id}>
+                {route.route_short_name || route.route_id}
+                {" — "}
+                {route.route_long_name || ""}
+              </option>
             ))}
-          </svg>
-          <div className="controls-row" style={{ marginTop: 10 }}>
-            <span className="pill ok">● operational</span>
-            <span className="pill warn">● warning</span>
-            <span className="pill fail">● failed</span>
-          </div>
+          </select>
+
+          <select
+            value={selectedTripId}
+            onChange={e => {
+              setSelectedTripId(e.target.value);
+              setSelectedStopId("");
+            }}
+            disabled={!routeTrips.length}
+          >
+            <option value="">Select trip pattern</option>
+            {routeTrips.map((trip, index) => (
+              <option key={trip.trip_id} value={trip.trip_id}>
+                Pattern {index + 1}
+                {" — Direction "}
+                {trip.direction_id ?? "N/A"}
+              </option>
+            ))}
+          </select>
         </div>
-        <div className="panel">
-          <h2>Links</h2>
-          <table>
-            <thead><tr><th>Link</th><th>Protocol</th><th>Status</th><th>Loss</th></tr></thead>
-            <tbody>
-              {links.map((l) => (
-                <tr key={l.link_id}>
-                  <td>{l.link_id}</td>
-                  <td>{l.protocol}</td>
-                  <td><span className={statusPillClass(l.status === "up" ? "operational" : l.status === "degraded" ? "warning" : "failed")}>{l.status}</span></td>
-                  <td>{l.packet_loss_pct}%</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <h2 style={{ marginTop: 18 }}>Simulation Controls</h2>
-          <div className="controls-row">
-            <select value={selectedLink} onChange={(e) => setSelectedLink(e.target.value)}>
-              <option value="">Select a link…</option>
-              {links.map((l) => <option key={l.link_id} value={l.link_id}>{l.link_id}</option>)}
-            </select>
-            <button className="btn danger" disabled={!selectedLink || busy}
-              onClick={async () => { setBusy(true); await Api.simulateNetworkFailure(selectedLink); setBusy(false); reload(); }}>
-              Simulate Network Failure
-            </button>
-            <button className="btn" disabled={!selectedLink || busy}
-              onClick={async () => { setBusy(true); await Api.restoreNetwork(selectedLink); setBusy(false); reload(); }}>
-              Restore Link
-            </button>
-          </div>
-          <p className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-            In the Cisco Packet Tracer model, OSPF detects a topology change on
-            the failed link and recalculates the shortest path through a
-            redundant link. This panel mirrors that recalculation for the
-            simulated network layer.
+
+        {selectedRoute && (
+          <p className="muted" style={{ marginTop: 12 }}>
+            Selected: {selectedRoute.route_short_name}
+            {" — "}
+            {selectedRoute.route_long_name}
           </p>
+        )}
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Recorded BEST Stop Connections</h2>
+
+        <p className="muted">
+          Blue lines join consecutive stops in the selected
+          trip pattern. These are geographic connections
+          between stops, not surveyed road alignments.
+        </p>
+
+        {loading ? (
+          <div className="empty-state">
+            Loading BEST network…
+          </div>
+        ) : (
+          <div
+            ref={mapContainerRef}
+            style={{
+              width: "100%",
+              height: 480,
+              marginTop: 12,
+              borderRadius: 12,
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+              zIndex: 0
+            }}
+          />
+        )}
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Simulated Stop Failure</h2>
+
+        <p className="muted">
+          Select a recorded stop to simulate flooding,
+          an accident or another temporary closure.
+        </p>
+
+        <div className="controls-row" style={{
+          display: "flex",
+          flexWrap: "wrap",
+          gap: 12
+        }}>
+          <select
+            value={selectedStopId}
+            onChange={e => setSelectedStopId(e.target.value)}
+            disabled={!tripStops.length}
+          >
+            <option value="">Select affected stop</option>
+            {tripStops.map((stop, index) => (
+              <option
+                key={`${stop.stop_id}-${index}`}
+                value={stop.stop_id}
+              >
+                {index + 1}. {stop.stop_name}
+              </option>
+            ))}
+          </select>
+
+          <button
+            className="btn danger"
+            disabled={!selectedStopId || loading}
+            onClick={simulateFailure}
+          >
+            Simulate Stop Failure
+          </button>
+
+          <button
+            className="btn"
+            disabled={!blockedStopId}
+            onClick={restoreNetwork}
+          >
+            Restore Stop
+          </button>
         </div>
+
+        {blockedStopId && (
+          <div style={{ marginTop: 18 }}>
+            <span className="pill fail">
+              ● Simulated stop unavailable
+            </span>
+
+            <p style={{ marginTop: 12 }}>
+              <strong>Affected stop:</strong>{" "}
+              {stopLookup.get(String(blockedStopId))?.stop_name ||
+                blockedStopId}
+            </p>
+
+            <p>
+              <strong>Affected BEST routes:</strong>{" "}
+              {affectedRoutes.length}
+            </p>
+
+            <div style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8
+            }}>
+              {affectedRoutes.slice(0, 20).map(routeId => (
+                <span key={routeId} className="pill warn">
+                  {routeLookup.get(String(routeId))
+                    ?.route_short_name || routeId}
+                </span>
+              ))}
+            </div>
+
+            {affectedRoutes.length > 20 && (
+              <p className="muted">
+                Showing the first 20 affected routes.
+              </p>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Network Analysis</h2>
+
+        <p>
+          <strong>Selected trip stops:</strong>{" "}
+          {tripStops.length}
+        </p>
+
+        <p>
+          <strong>Recorded consecutive connections:</strong>{" "}
+          {Math.max(0, tripStops.length - 1)}
+        </p>
+
+        <p>
+          <strong>Simulation status:</strong>{" "}
+          {blockedStopId
+            ? "One stop blocked in the routing model"
+            : "No stop blocked in this view"}
+        </p>
+
+        <p className="muted" style={{
+          marginTop: 12,
+          fontSize: 12
+        }}>
+          Stop failures are simulated locally. The map
+          shows recorded stop sequences; it does not
+          prove that vehicles can physically divert
+          along an alternative road.
+        </p>
       </div>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Incident Management
