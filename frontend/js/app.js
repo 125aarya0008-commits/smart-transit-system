@@ -3015,43 +3015,354 @@ function NetworkStatistics() {
 // Protocol reference page
 // ---------------------------------------------------------------------------
 
+
 const PROTOCOL_ROWS = [
-  ["Application", "HTTP/HTTPS", "Dashboard ↔ backend REST API traffic"],
-  ["Application", "MQTT", "Lightweight bus status & emergency-message pushes"],
-  ["Application", "DNS", "Resolves the dashboard/server hostname"],
-  ["Application", "SNMP", "Conceptual polling of router/switch health"],
-  ["Transport", "TCP", "Reliable delivery for dashboard/API traffic"],
-  ["Transport", "UDP", "Low-latency bus telemetry pings"],
-  ["Network", "IPv4", "Addressing for every node in the topology"],
-  ["Network", "ICMP", "Connectivity/reachability checks between zones"],
-  ["Network", "OSPF", "Dynamic route recalculation between routers"],
-  ["Data Link", "Ethernet", "Router–switch and switch–host links"],
-  ["Data Link", "Wi-Fi", "Bus-to-roadside-access-point connectivity"],
+  {
+    layer: "Application",
+    protocol: "HTTP / HTTPS",
+    purpose: "Transfers dashboard pages, JavaScript, BEST data and API requests.",
+    status: "Website",
+    demonstration: "Access the deployed Smart Transit website through a browser."
+  },
+  {
+    layer: "Application",
+    protocol: "DNS",
+    purpose: "Resolves the deployed website hostname to a network address.",
+    status: "Website",
+    demonstration: "Open the Render website using its domain name."
+  },
+  {
+    layer: "Application",
+    protocol: "MQTT",
+    purpose: "Proposed lightweight messaging for bus location updates, emergency alerts and sensor telemetry.",
+    status: "Proposed",
+    demonstration: "Future integration with ESP32 or IoT bus devices and an MQTT broker."
+  },
+  {
+    layer: "Application",
+    protocol: "SNMP",
+    purpose: "Proposed monitoring of router availability, interface status and network performance.",
+    status: "Proposed",
+    demonstration: "Future integration with network-management tools."
+  },
+  {
+    layer: "Transport",
+    protocol: "TCP",
+    purpose: "Provides reliable transport for HTTP/HTTPS connections where TCP is used.",
+    status: "Website",
+    demonstration: "Can be inspected using browser network tools or Wireshark."
+  },
+  {
+    layer: "Transport",
+    protocol: "UDP",
+    purpose: "Supports low-overhead datagram communication and DNS queries in applicable configurations.",
+    status: "Reference",
+    demonstration: "Can be studied through Wireshark or an additional Packet Tracer experiment."
+  },
+  {
+    layer: "Network",
+    protocol: "IPv4",
+    purpose: "Provides logical addressing and packet forwarding between simulated network devices.",
+    status: "Verified",
+    demonstration: "Configured 192.168.x.x and 10.0.x.x networks in Cisco Packet Tracer."
+  },
+  {
+    layer: "Network",
+    protocol: "ICMP",
+    purpose: "Tests connectivity between simulated buses, network gateways and the central server.",
+    status: "Verified",
+    demonstration: "Successful ping tests with 4/4 replies and 0% packet loss."
+  },
+  {
+    layer: "Network",
+    protocol: "OSPF",
+    purpose: "Automatically recalculates router paths when the primary communication link fails.",
+    status: "Verified",
+    demonstration: "Primary route failed over to GTW2 and returned after restoration."
+  },
+  {
+    layer: "Network / Data Link",
+    protocol: "ARP",
+    purpose: "Resolves IPv4 addresses to MAC addresses on local Ethernet networks.",
+    status: "Implemented",
+    demonstration: "Used by the IPv4 Ethernet topology; ARP packet capture has not been separately documented."
+  },
+  {
+    layer: "Data Link",
+    protocol: "Ethernet",
+    purpose: "Connects routers, switches, PCs and the central server in the Packet Tracer topology.",
+    status: "Verified",
+    demonstration: "Four routers, two switches, two PCs and one server connected through wired interfaces."
+  },
+  {
+    layer: "Data Link",
+    protocol: "Wi-Fi",
+    purpose: "Proposed wireless communication between buses and roadside access points.",
+    status: "Proposed",
+    demonstration: "Future Packet Tracer wireless-access-point extension."
+  }
 ];
 
 function ProtocolsPage() {
+  const [filter, setFilter] = React.useState("All");
+
+  const statusColors = {
+    Verified: {
+      background: "#dcfce7",
+      color: "#166534"
+    },
+    Implemented: {
+      background: "#dbeafe",
+      color: "#1d4ed8"
+    },
+    Website: {
+      background: "#dbeafe",
+      color: "#1d4ed8"
+    },
+    Proposed: {
+      background: "#fef3c7",
+      color: "#92400e"
+    },
+    Reference: {
+      background: "#f1f5f9",
+      color: "#475569"
+    }
+  };
+
+  const filteredProtocols = PROTOCOL_ROWS.filter(
+    (item) => filter === "All" || item.status === filter
+  );
+
+  const verifiedCount = PROTOCOL_ROWS.filter(
+    (item) => item.status === "Verified"
+  ).length;
+
+  const proposedCount = PROTOCOL_ROWS.filter(
+    (item) => item.status === "Proposed"
+  ).length;
+
   return (
-    <div className="panel">
-      <h2>Communication Protocol Stack</h2>
-      <p className="muted" style={{ fontSize: 12.5, marginBottom: 14 }}>
-        Every simulated feature in this system maps to a concrete layer of the
-        network stack modelled in the Cisco Packet Tracer topology.
-      </p>
-      <table>
-        <thead><tr><th>Layer</th><th>Protocol</th><th>Purpose in this system</th></tr></thead>
-        <tbody>
-          {PROTOCOL_ROWS.map(([layer, proto, purpose], i) => (
-            <tr key={i}>
-              <td>{layer}</td>
-              <td>{proto}</td>
-              <td style={{ fontFamily: "var(--sans)" }}>{purpose}</td>
-            </tr>
+    <div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Smart Transit — Communication Protocol Stack</h2>
+
+        <p className="muted">
+          This section explains the communication protocols
+          used in the Smart Transit system, the Cisco Packet
+          Tracer experiment and proposed future extensions.
+        </p>
+      </div>
+
+      <div
+        className="grid grid-4"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="panel stat ok">
+          <div className="label">PROTOCOLS DOCUMENTED</div>
+          <div className="value">{PROTOCOL_ROWS.length}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">EXPERIMENTALLY VERIFIED</div>
+          <div className="value">{verifiedCount}</div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">FUTURE INTEGRATIONS</div>
+          <div className="value">{proposedCount}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">OSPF FAILOVER</div>
+          <div
+            className="value"
+            style={{ fontSize: 22 }}
+          >
+            VERIFIED
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Protocol Implementation Status</h2>
+
+        <p className="muted" style={{ marginBottom: 16 }}>
+          Verified means demonstrated in Packet Tracer.
+          Website means used by the deployed web application.
+          Implemented means present in the network configuration
+          but not separately captured as evidence.
+          Proposed means planned for future development.
+          Reference means included for technical explanation.
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: 8,
+            marginBottom: 16
+          }}
+        >
+          {[
+            "All",
+            "Verified",
+            "Implemented",
+            "Website",
+            "Proposed",
+            "Reference"
+          ].map((option) => (
+            <button
+              key={option}
+              className="btn"
+              onClick={() => setFilter(option)}
+              style={{
+                background:
+                  filter === option ? "#2563eb" : "#f1f5f9",
+                color:
+                  filter === option ? "#ffffff" : "#334155"
+              }}
+            >
+              {option}
+            </button>
           ))}
-        </tbody>
-      </table>
+        </div>
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>OSI / TCP-IP Layer</th>
+                <th>Protocol</th>
+                <th>Purpose in Smart Transit</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredProtocols.map((item) => (
+                <tr key={item.protocol}>
+                  <td>{item.layer}</td>
+
+                  <td>
+                    <strong>{item.protocol}</strong>
+                  </td>
+
+                  <td style={{ fontFamily: "var(--sans)" }}>
+                    {item.purpose}
+                  </td>
+
+                  <td>
+                    <span
+                      style={{
+                        display: "inline-block",
+                        padding: "5px 10px",
+                        borderRadius: 20,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        whiteSpace: "nowrap",
+                        ...(statusColors[item.status] || {})
+                      }}
+                    >
+                      {item.status}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+
+              {filteredProtocols.length === 0 && (
+                <tr>
+                  <td colSpan="4">
+                    No protocols in this category.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Protocol Demonstration and Evidence</h2>
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Protocol</th>
+                <th>Demonstration / Evidence</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {PROTOCOL_ROWS.map((item) => (
+                <tr key={item.protocol}>
+                  <td>
+                    <strong>{item.protocol}</strong>
+                  </td>
+
+                  <td>{item.demonstration}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="panel">
+        <h2>Verified OSPF Communication Scenario</h2>
+
+        <p className="muted">
+          The Cisco Packet Tracer experiment demonstrates
+          automatic communication-path recovery after
+          a simulated primary link failure.
+        </p>
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Stage</th>
+                <th>Packet Route</th>
+                <th>Observation</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td>Normal</td>
+                <td>GTW1 → PE → CORE → Server</td>
+                <td>Primary OSPF path selected</td>
+              </tr>
+
+              <tr>
+                <td>Link failure</td>
+                <td>GTW1 → GTW2 → CORE → Server</td>
+                <td>Automatic backup path selected</td>
+              </tr>
+
+              <tr>
+                <td>Recovery</td>
+                <td>GTW1 → PE → CORE → Server</td>
+                <td>Primary path restored</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p
+          className="muted"
+          style={{ marginTop: 12, fontSize: 12 }}
+        >
+          Connectivity tests showed 4 successful
+          replies out of 4 packets during the
+          recorded tests, with 0% packet loss.
+          Traceroute confirmed the selected paths.
+        </p>
+      </div>
     </div>
   );
 }
+
 
 function BestExplorerPage() {
   return <div className="panel" style={{padding:0,overflow:"hidden"}}>
