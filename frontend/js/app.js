@@ -112,45 +112,42 @@ function Dashboard({ goTo }) {
   const mapRef = React.useRef(null);
 
   // Load actual recorded Mumbai BEST data.
+ 
+  // Load actual recorded Mumbai BEST data.
   React.useEffect(() => {
     let cancelled = false;
 
     async function loadDashboard() {
-      try {
-        setLoading(true);
-        setError("");
+      setLoading(true);
+      setError("");
 
+      try {
         if (!window.BestData) {
           throw new Error("BEST data library is unavailable.");
         }
 
         await window.BestData.load();
 
+        const [routes, stops, trips] = await Promise.all([
+          window.BestData.getRoutes(),
+          window.BestData.getStops(),
+          window.BestData.getTrips()
+        ]);
+
         if (cancelled) return;
 
-const [routeResult, stopResult, tripResult] =
-  await Promise.all([
-    window.BestData.getRoutes(),
-    window.BestData.getStops(),
-    window.BestData.getTrips()
-  ]);
-
-setBestRoutes(
-  Array.isArray(routeResult) ? routeResult : []
-);
-setBestStops(
-  Array.isArray(stopResult) ? stopResult : []
-);
-setBestTrips(
-  Array.isArray(tripResult) ? tripResult : []
-);
+        setBestRoutes(Array.isArray(routes) ? routes : []);
+        setBestStops(Array.isArray(stops) ? stops : []);
+        setBestTrips(Array.isArray(trips) ? trips : []);
 
       } catch (err) {
         if (!cancelled) {
           setError(err.message || "Unable to load BEST data.");
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     }
 
