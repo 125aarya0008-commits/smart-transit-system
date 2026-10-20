@@ -964,7 +964,6 @@ const routeComparison = useMemo(() => {
     setOriginal(null);
     setAlternative(null);
     setPatternIndex(0);
-    BestRouting.reset();
 
     if (routeId) {
       BestData.getRouteDetails(routeId)
@@ -999,7 +998,6 @@ const routeComparison = useMemo(() => {
     setIncident(null);
     setOriginal(null);
     setAlternative(null);
-    BestRouting.reset();
   }, [details, patternIndex]);
 
   const matchingRoutes = routes.filter(r => {
