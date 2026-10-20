@@ -99,65 +99,358 @@ function Nav({ tab, setTab }) {
 // Dashboard
 // ---------------------------------------------------------------------------
 
-function Dashboard({ goTo }) {
-  const [network] = usePolling(Api.network, []);
-  const [buses] = usePolling(Api.buses, []);
-  const [alerts] = usePolling(Api.alerts, []);
-  const [routes] = usePolling(Api.routes, []);
 
-  const busStats = useMemo(() => {
-    if (!buses) return null;
-    return {
-      total: buses.length,
-      active: buses.filter((b) => b.status !== "offline" && b.status !== "stopped").length,
-      delayed: buses.filter((b) => b.status === "delayed" || b.status === "severely_delayed").length,
-      rerouted: buses.filter((b) => b.status === "rerouted").length,
-      offline: buses.filter((b) => b.status === "offline" || b.status === "stopped").length,
+function Dashboard({ goTo }) {
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [bestRoutes, setBestRoutes] = React.useState([]);
+  const [bestStops, setBestStops] = React.useState([]);
+  const [bestTrips, setBestTrips] = React.useState([]);
+  const [search, setSearch] = React.useState("");
+
+  const mapContainerRef = React.useRef(null);
+  const mapRef = React.useRef(null);
+
+  // Load actual recorded Mumbai BEST data.
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      try {
+        setLoading(true);
+        setError("");
+
+        if (!window.BestData) {
+          throw new Error("BEST data library is unavailable.");
+        }
+
+        await window.BestData.load();
+
+        if (cancelled) return;
+
+        setBestRoutes(window.BestData.getRoutes() || []);
+        setBestStops(window.BestData.getStops() || []);
+        setBestTrips(window.BestData.getTrips() || []);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load BEST data.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadDashboard();
+
+    return () => {
+      cancelled = true;
     };
-  }, [buses]);
+  }, []);
+
+  // Create the map once, then draw the BEST stop locations.
+  React.useEffect(() => {
+    if (
+      loading ||
+      !mapContainerRef.current ||
+      !window.L ||
+      !bestStops.length
+    ) {
+      return;
+    }
+
+    if (mapRef.current) return;
+
+    const map = window.L.map(mapContainerRef.current, {
+      center: [19.076, 72.8777],
+      zoom: 11,
+      preferCanvas: true
+    });
+
+    mapRef.current = map;
+
+    window.L.tileLayer(
+      "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+      {
+        attribution:
+          '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 19
+      }
+    ).addTo(map);
+
+    const stopLayer = window.L.layerGroup().addTo(map);
+
+    const bounds = [];
+
+    bestStops.forEach((stop) => {
+      const lat = Number(stop.stop_lat);
+      const lon = Number(stop.stop_lon);
+
+      if (
+        !Number.isFinite(lat) ||
+        !Number.isFinite(lon) ||
+        lat < -90 ||
+        lat > 90 ||
+        lon < -180 ||
+        lon > 180 ||
+        (lat === 0 && lon === 0)
+      ) {
+        return;
+      }
+
+      bounds.push([lat, lon]);
+
+      const marker = window.L.circleMarker([lat, lon], {
+        radius: 3,
+        color: "#2563eb",
+        weight: 1,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.55
+      });
+
+      const popup = document.createElement("div");
+
+      const title = document.createElement("strong");
+      title.textContent = stop.stop_name || "BEST Stop";
+
+      const id = document.createElement("div");
+      id.textContent = `Stop ID: ${stop.stop_id}`;
+
+      popup.appendChild(title);
+      popup.appendChild(id);
+
+      marker.bindPopup(popup);
+      marker.addTo(stopLayer);
+    });
+
+    if (bounds.length) {
+      map.fitBounds(bounds, {
+        padding: [20, 20],
+        maxZoom: 12
+      });
+    }
+
+    map.invalidateSize();
+
+    return () => {
+      map.remove();
+      mapRef.current = null;
+    };
+  }, [loading, bestStops]);
+
+  const filteredRoutes = React.useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    if (!q) return bestRoutes.slice(0, 12);
+
+    return bestRoutes
+      .filter((route) => {
+        return (
+          String(route.route_short_name || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(route.route_long_name || "")
+            .toLowerCase()
+            .includes(q) ||
+          String(route.route_id || "")
+            .toLowerCase()
+            .includes(q)
+        );
+      })
+      .slice(0, 30);
+  }, [bestRoutes, search]);
+
+  const statCard = (label, value, note, extraClass = "") => (
+    <div className={`panel stat ${extraClass}`}>
+      <div className="label">{label}</div>
+      <div className="value">{value}</div>
+      <div className="label muted">{note}</div>
+    </div>
+  );
 
   return (
     <div>
-      <div className="grid grid-4" style={{ marginBottom: 16 }}>
-        <div className="panel stat ok">
-          <div className="label">NETWORK HEALTH</div>
-          <div className="value">
-            {network ? `${100 - Math.round(network.summary.avg_packet_loss_pct)}%` : "—"}
-          </div>
-          <div className="label muted">{network ? `${network.summary.failed_links} link(s) down` : ""}</div>
-        </div>
-        <div className="panel stat">
-          <div className="label">CONNECTED BUSES</div>
-          <div className="value">{busStats ? `${busStats.active}/${busStats.total}` : "—"}</div>
-          <div className="label muted">active of fleet</div>
-        </div>
-        <div className="panel stat warn">
-          <div className="label">DELAYED / REROUTED</div>
-          <div className="value">{busStats ? busStats.delayed + busStats.rerouted : "—"}</div>
-          <div className="label muted">buses affected</div>
-        </div>
-        <div className="panel stat fail">
-          <div className="label">ACTIVE ALERTS</div>
-          <div className="value">{alerts ? alerts.length : "—"}</div>
-          <div className="label muted" onClick={() => goTo("alerts")} style={{ cursor: "pointer" }}>
-            view all →
-          </div>
-        </div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Mumbai BEST Transit Network</h2>
+
+        <p className="muted">
+          Explore recorded BEST routes, stops and trip patterns.
+          Route disruptions and rerouting are simulated for
+          educational network analysis.
+        </p>
+
+        <button
+          className="btn primary"
+          onClick={() => goTo("routes")}
+          style={{ marginTop: 10 }}
+        >
+          Open Route Management →
+        </button>
       </div>
 
-      <div className="grid grid-2">
-        <div className="panel">
-          <h2>Live Route Map</h2>
-          {routes ? <RouteMapSVG routes={routes} /> : <div className="empty-state">Loading…</div>}
+      {error && (
+        <div
+          className="panel"
+          style={{
+            color: "#b91c1c",
+            marginBottom: 16
+          }}
+        >
+          {error}
         </div>
-        <div className="panel">
-          <h2>Recent Alerts</h2>
-          <AlertList alerts={(alerts || []).slice(0, 8)} />
-        </div>
+      )}
+
+      <div
+        className="grid grid-4"
+        style={{ marginBottom: 16 }}
+      >
+        {statCard(
+          "BEST ROUTES",
+          loading ? "—" : bestRoutes.length.toLocaleString(),
+          "Recorded route entries",
+          "ok"
+        )}
+
+        {statCard(
+          "RECORDED STOPS",
+          loading ? "—" : bestStops.length.toLocaleString(),
+          "Stop locations in dataset"
+        )}
+
+        {statCard(
+          "TRIP PATTERNS",
+          loading ? "—" : bestTrips.length.toLocaleString(),
+          "Recorded journey patterns"
+        )}
+
+        {statCard(
+          "DATA SOURCE",
+          loading ? "Loading" : error ? "Error" : "BEST",
+          "Static transit dataset",
+          "ok"
+        )}
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Mumbai BEST Stop Network Map</h2>
+
+        <p className="muted">
+          Interactive geographic overview of recorded bus
+          stops. Click a marker to view its stop name and ID.
+        </p>
+
+        {loading ? (
+          <div className="empty-state">
+            Loading Mumbai BEST stop data…
+          </div>
+        ) : !bestStops.length ? (
+          <div className="empty-state">
+            No BEST stop locations available.
+          </div>
+        ) : (
+          <div
+            ref={mapContainerRef}
+            style={{
+              width: "100%",
+              height: 460,
+              marginTop: 14,
+              borderRadius: 12,
+              border: "1px solid #e2e8f0",
+              overflow: "hidden",
+              zIndex: 0
+            }}
+          />
+        )}
+
+        <p
+          className="muted"
+          style={{ fontSize: 12, marginTop: 10 }}
+        >
+          Markers represent recorded stop coordinates, not
+          live bus positions. This map does not provide
+          real-time vehicle tracking or arrival predictions.
+        </p>
+      </div>
+
+      <div className="panel">
+        <h2>Explore BEST Routes</h2>
+
+        <p className="muted">
+          Search by BEST route number, route name or route ID.
+        </p>
+
+        <input
+          type="text"
+          placeholder="Search routes, e.g. 45 AS"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: "100%",
+            padding: "12px",
+            margin: "12px 0",
+            border: "1px solid #d1d5db",
+            borderRadius: 8,
+            boxSizing: "border-box"
+          }}
+        />
+
+        {loading ? (
+          <div className="empty-state">
+            Loading routes…
+          </div>
+        ) : filteredRoutes.length === 0 ? (
+          <div className="empty-state">
+            No matching BEST routes found.
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                textAlign: "left"
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={{ padding: 10 }}>Route</th>
+                  <th style={{ padding: 10 }}>Description</th>
+                  <th style={{ padding: 10 }}>Stops</th>
+                  <th style={{ padding: 10 }}>Patterns</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {filteredRoutes.map((route) => (
+                  <tr key={route.route_id}>
+                    <td style={{ padding: 10 }}>
+                      <strong>
+                        {route.route_short_name ||
+                          route.route_id}
+                      </strong>
+                    </td>
+
+                    <td style={{ padding: 10 }}>
+                      {route.route_long_name || "—"}
+                    </td>
+
+                    <td style={{ padding: 10 }}>
+                      {route.stop_count ?? "—"}
+                    </td>
+
+                    <td style={{ padding: 10 }}>
+                      {route.trip_pattern_count ?? "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Route map (simplified linear/branching diagram of zones, SVG)
