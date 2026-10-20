@@ -128,10 +128,12 @@ function Dashboard({ goTo }) {
 
         if (cancelled) return;
 
-
-const routeResult = window.BestData.getRoutes();
-const stopResult = window.BestData.getStops();
-const tripResult = window.BestData.getTrips();
+const [routeResult, stopResult, tripResult] =
+  await Promise.all([
+    window.BestData.getRoutes(),
+    window.BestData.getStops(),
+    window.BestData.getTrips()
+  ]);
 
 setBestRoutes(
   Array.isArray(routeResult) ? routeResult : []
