@@ -2852,12 +2852,217 @@ const restoreIncident = async (item) => {
 // Alerts page
 // ---------------------------------------------------------------------------
 
+
 function AlertsPage() {
-  const [alerts] = usePolling(Api.alerts, []);
+  const [alerts, setAlerts] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+
+  const refreshAlerts = React.useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
+
+      if (!window.BestRouting) {
+        throw new Error("BEST routing engine is unavailable.");
+      }
+
+      await window.BestRouting.load();
+
+      const result = window.BestRouting.getDisruptions();
+
+      const stopAlerts = (result.blocked_stops || []).map(
+        (stopId) => ({
+          id: "stop-" + stopId,
+          type: "Blocked Stop",
+          severity: "High",
+          location: String(stopId),
+          message:
+            "A simulated disruption is affecting BEST stop " +
+            stopId +
+            ". Routes using this stop may require an alternative path."
+        })
+      );
+
+      const connectionAlerts = (
+        result.blocked_connections || []
+      ).map((edge) => ({
+        id: "connection-" + String(edge),
+        type: "Blocked Connection",
+        severity: "High",
+        location: String(edge),
+        message:
+          "A simulated BEST stop-network connection is unavailable. " +
+          "Affected journeys may require rerouting."
+      }));
+
+      setAlerts([...stopAlerts, ...connectionAlerts]);
+    } catch (err) {
+      setError(err.message || "Unable to load alerts.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refreshAlerts();
+  }, [refreshAlerts]);
+
+  const blockedStopCount = alerts.filter(
+    (alert) => alert.type === "Blocked Stop"
+  ).length;
+
+  const blockedConnectionCount = alerts.filter(
+    (alert) => alert.type === "Blocked Connection"
+  ).length;
+
   return (
-    <div className="panel">
-      <h2>All Alerts</h2>
-      <AlertList alerts={alerts} />
+    <div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Smart Transit — Alerts Management</h2>
+
+        <p className="muted">
+          Monitor active simulated disruptions affecting
+          Mumbai BEST route calculations. Alerts are
+          generated from the shared BEST routing engine,
+          not from live bus tracking or official BEST
+          service announcements.
+        </p>
+      </div>
+
+      <div
+        className="grid grid-4"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="panel stat">
+          <div className="label">ACTIVE ALERTS</div>
+          <div className="value">{alerts.length}</div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">BLOCKED STOPS</div>
+          <div className="value">{blockedStopCount}</div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">BLOCKED CONNECTIONS</div>
+          <div className="value">{blockedConnectionCount}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">ALERT SOURCE</div>
+          <div
+            className="value"
+            style={{ fontSize: 19 }}
+          >
+            SIMULATION
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Alert Controls</h2>
+
+        <p className="muted">
+          Create disruptions in Route Management.
+          Resolve them in Incident Management.
+          Refresh this page to synchronize the active alerts.
+        </p>
+
+        <button
+          className="btn"
+          onClick={refreshAlerts}
+          style={{ marginTop: 12 }}
+        >
+          Refresh Alerts
+        </button>
+      </div>
+
+      <div className="panel">
+        <h2>Active Passenger Advisories</h2>
+
+        {error && (
+          <p style={{ color: "#dc2626" }}>{error}</p>
+        )}
+
+        {loading ? (
+          <div className="empty-state">
+            Loading simulated alerts…
+          </div>
+        ) : alerts.length === 0 ? (
+          <div className="empty-state">
+            <h3>No Active Alerts</h3>
+
+            <p>
+              No BEST stops or connections are currently
+              blocked in the simulation.
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gap: 14 }}>
+            {alerts.map((alert) => (
+              <div
+                key={alert.id}
+                style={{
+                  padding: 18,
+                  border: "1px solid #fecaca",
+                  borderLeft: "5px solid #dc2626",
+                  borderRadius: 10,
+                  background: "#fffafa"
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    flexWrap: "wrap",
+                    gap: 10,
+                    marginBottom: 12
+                  }}
+                >
+                  <h3 style={{ margin: 0 }}>
+                    {alert.type}
+                  </h3>
+
+                  <span
+                    style={{
+                      padding: "5px 11px",
+                      borderRadius: 20,
+                      background: "#fee2e2",
+                      color: "#991b1b",
+                      fontSize: 12,
+                      fontWeight: 700
+                    }}
+                  >
+                    {alert.severity} — SIMULATED
+                  </span>
+                </div>
+
+                <p>
+                  <strong>Affected location:</strong>{" "}
+                  {alert.location}
+                </p>
+
+                <p>{alert.message}</p>
+
+                <p
+                  style={{
+                    fontSize: 12,
+                    color: "#64748b",
+                    marginTop: 12
+                  }}
+                >
+                  Advisory: Check the Route Management
+                  page for an alternative calculated
+                  journey. This is a simulated scenario,
+                  not a real-world service alert.
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
