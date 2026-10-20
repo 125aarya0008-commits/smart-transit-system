@@ -128,9 +128,21 @@ function Dashboard({ goTo }) {
 
         if (cancelled) return;
 
-        setBestRoutes(window.BestData.getRoutes() || []);
-        setBestStops(window.BestData.getStops() || []);
-        setBestTrips(window.BestData.getTrips() || []);
+
+const routeResult = window.BestData.getRoutes();
+const stopResult = window.BestData.getStops();
+const tripResult = window.BestData.getTrips();
+
+setBestRoutes(
+  Array.isArray(routeResult) ? routeResult : []
+);
+setBestStops(
+  Array.isArray(stopResult) ? stopResult : []
+);
+setBestTrips(
+  Array.isArray(tripResult) ? tripResult : []
+);
+
       } catch (err) {
         if (!cancelled) {
           setError(err.message || "Unable to load BEST data.");
