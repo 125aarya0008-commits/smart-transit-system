@@ -2314,6 +2314,101 @@ function NetworkTopology() {
 
       <div className="panel">
         <h2>Communication Protocols Used / Proposed</h2>
+              
+<div className="panel" style={{ marginTop: 16 }}>
+  <h2>Cisco Packet Tracer — Verified OSPF Results</h2>
+
+  <p className="muted">
+    The communication topology was implemented and tested
+    in Cisco Packet Tracer using four Cisco 2911 routers,
+    two switches, two PCs, and one server.
+  </p>
+
+  <div className="grid grid-4" style={{ marginTop: 16 }}>
+    <div className="panel stat ok">
+      <div className="label">PACKETS SENT</div>
+      <div className="value">4</div>
+    </div>
+
+    <div className="panel stat ok">
+      <div className="label">PACKETS RECEIVED</div>
+      <div className="value">4</div>
+    </div>
+
+    <div className="panel stat ok">
+      <div className="label">PACKET LOSS</div>
+      <div className="value">0%</div>
+    </div>
+
+    <div className="panel stat ok">
+      <div className="label">OSPF FAILOVER</div>
+      <div className="value" style={{ fontSize: 22 }}>
+        VERIFIED
+      </div>
+    </div>
+  </div>
+
+  <h3 style={{ marginTop: 20 }}>Routing Test Results</h3>
+
+  <div style={{ overflowX: "auto" }}>
+    <table>
+      <thead>
+        <tr>
+          <th>Test</th>
+          <th>Communication Path</th>
+          <th>Result</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        <tr>
+          <td>Normal operation</td>
+          <td>GTW1 → PE → CORE → Server</td>
+          <td><span className="pill ok">SUCCESS</span></td>
+        </tr>
+
+        <tr>
+          <td>Primary link failure</td>
+          <td>GTW1 → GTW2 → CORE → Server</td>
+          <td><span className="pill ok">REROUTED</span></td>
+        </tr>
+
+        <tr>
+          <td>Primary link restored</td>
+          <td>GTW1 → PE → CORE → Server</td>
+          <td><span className="pill ok">RESTORED</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style={{ marginTop: 20 }}>Packet Tracer Observations</h3>
+
+  <p>
+    <strong>Primary path:</strong> Traceroute confirmed
+    communication through 192.168.10.1, 10.0.1.2,
+    and 10.0.4.2.
+  </p>
+
+  <p>
+    <strong>Backup path:</strong> After disabling the
+    primary link, OSPF selected the alternative route
+    through 192.168.10.1, 10.0.2.2, and 10.0.3.2.
+  </p>
+
+  <p>
+    <strong>Recovery:</strong> After restoring the
+    primary connection, OSPF returned traffic to
+    the preferred route through PE.
+  </p>
+
+  <p className="muted" style={{ fontSize: 12 }}>
+    Results obtained from Cisco Packet Tracer testing.
+    This evidence is separate from the browser-based
+    network simulation shown above.
+  </p>
+</div>
+
 
         <div style={{ overflowX: "auto" }}>
           <table>
