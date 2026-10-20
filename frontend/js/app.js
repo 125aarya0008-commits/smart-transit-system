@@ -1,4 +1,4 @@
-const { useState, useEffect, useMemo, useCallback } = React;
+var { useState, useEffect, useMemo, useCallback } = React;
 
 // ---------------------------------------------------------------------------
 // Small shared utilities
