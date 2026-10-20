@@ -1012,7 +1012,7 @@ function RouteVisualization() {
   return (
     <div>
       <div
-        className="controls-row"
+      className="controls-row"
         style={{
           marginBottom: 12,
           display: "flex",
@@ -1059,125 +1059,6 @@ function RouteVisualization() {
     </div>
   );
 }
-
-
-    return (
-      <div>
-        <div className="controls-row"
-          style={{ marginBottom: 10 }}>
-          <span style={{ color: "#2563eb" }}>
-            ● Original journey
-          </span>
-          {incident && (
-            <span style={{ color: "#16a34a" }}>
-              ● Alternative journey
-            </span>
-          )}
-          {incident && (
-            <span style={{ color: "#dc2626" }}>
-              ✕ Disrupted stop
-            </span>
-          )}
-        </div>
-
-        <svg
-          viewBox="0 0 800 440"
-          style={{
-            width: "100%",
-            background: "#f8fafc",
-            border: "1px solid #e2e8f0",
-            borderRadius: 12
-          }}
-        >
-          <polyline
-            points={line(originalStops)}
-            fill="none"
-            stroke="#2563eb"
-            strokeWidth="3"
-            strokeDasharray={incident ? "6 5" : "none"}
-            strokeLinejoin="round"
-            strokeLinecap="round"
-          />
-
-          {alternativeStops.length > 0 && (
-            <polyline
-              points={line(alternativeStops)}
-              fill="none"
-              stroke="#16a34a"
-              strokeWidth="4"
-              strokeLinejoin="round"
-              strokeLinecap="round"
-            />
-          )}
-
-          {originalStops.map((s, i) => {
-            const p = point(s);
-            return (
-              <circle
-                key={`original-${i}`}
-                cx={p.x}
-                cy={p.y}
-                r="2.5"
-                fill="#2563eb"
-              >
-                <title>{s.stop_name}</title>
-              </circle>
-            );
-          })}
-
-          {blockedStop && (() => {
-            const p = point(blockedStop);
-            return (
-              <g>
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r="10"
-                  fill="#fee2e2"
-                  stroke="#dc2626"
-                  strokeWidth="2"
-                />
-                <text
-                  x={p.x}
-                  y={p.y + 4}
-                  textAnchor="middle"
-                  fontSize="13"
-                  fill="#dc2626"
-                  fontWeight="bold"
-                >
-                  ×
-                </text>
-              </g>
-            );
-          })()}
-
-          <circle
-            cx={start.x}
-            cy={start.y}
-            r="7"
-            fill="#16a34a"
-            stroke="white"
-            strokeWidth="2"
-          />
-
-          <circle
-            cx={end.x}
-            cy={end.y}
-            r="7"
-            fill="#dc2626"
-            stroke="white"
-            strokeWidth="2"
-          />
-        </svg>
-
-        <p className="muted" style={{ fontSize: 11 }}>
-          Geographic visualization of recorded stop
-          connections. Lines are straight between stops,
-          not surveyed road geometry.
-        </p>
-      </div>
-    );
-  }
 
   return (
     <div>
