@@ -2637,55 +2637,379 @@ function DoughnutChart({ labels, values, colors }) {
   </div>;
 }
 
+
 function NetworkStatistics() {
-  const [buses, busesError, reloadBuses] = usePolling(Api.buses, []);
-  const [routes, routesError, reloadRoutes] = usePolling(Api.routes, []);
-  const [network, networkError, reloadNetwork] = usePolling(Api.network, []);
-  const [incidents, incidentsError, reloadIncidents] = usePolling(Api.incidents, []);
-  const error = busesError || routesError || networkError || incidentsError;
-  if (error) return <div className="panel"><h2>Network Statistics unavailable</h2><p>Cannot load simulation data from the Render API: {error}</p><p>The original network statistics require the FastAPI backend. The Mumbai BEST Explorer can run without it.</p><button className="btn" onClick={() => {reloadBuses();reloadRoutes();reloadNetwork();reloadIncidents();}}>Retry</button></div>;
-  if (!buses || !routes || !network || !incidents) return <div className="empty-state">Loading statistics from simulation backend…</div>;
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [routes, setRoutes] = React.useState([]);
+  const [stops, setStops] = React.useState([]);
+  const [trips, setTrips] = React.useState([]);
+  const [search, setSearch] = React.useState("");
 
-  const busLabels = buses.map((b) => b.bus_id);
-  const busDelays = buses.map((b) => b.delay_minutes);
+  React.useEffect(() => {
+    let cancelled = false;
 
-  const routeStatusCounts = {
-    Available: routes.filter((r) => r.available).length,
-    Blocked: routes.filter((r) => !r.available).length,
-  };
+    async function loadStatistics() {
+      try {
+        setLoading(true);
+        setError("");
 
-  const linkStatusCounts = {
-    Up: (network.links || []).filter((l) => l.status === "up").length,
-    Degraded: (network.links || []).filter((l) => l.status === "degraded").length,
-    Down: (network.links || []).filter((l) => l.status === "down").length,
-  };
+        if (!window.BestData) {
+          throw new Error("BEST data library is unavailable.");
+        }
 
-  const incidentTypeCounts = {};
-  incidents.forEach((i) => { incidentTypeCounts[i.incident_type] = (incidentTypeCounts[i.incident_type] || 0) + 1; });
+        await window.BestData.load();
+
+        const [routeData, stopData, tripData] =
+          await Promise.all([
+            window.BestData.getRoutes(),
+            window.BestData.getStops(),
+            window.BestData.getTrips()
+          ]);
+
+        if (cancelled) return;
+
+        setRoutes(Array.isArray(routeData) ? routeData : []);
+        setStops(Array.isArray(stopData) ? stopData : []);
+        setTrips(Array.isArray(tripData) ? tripData : []);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load BEST data.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadStatistics();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const routeStatistics = React.useMemo(() => {
+    return routes.map((route) => ({
+      ...route,
+      patternCount: Number(route.trip_pattern_count || 0),
+      stopCount: Number(route.stop_count || 0)
+    }));
+  }, [routes]);
+
+  const topRoutes = React.useMemo(() => {
+    return [...routeStatistics]
+      .sort((a, b) => b.stopCount - a.stopCount)
+      .slice(0, 10);
+  }, [routeStatistics]);
+
+  const filteredRoutes = React.useMemo(() => {
+    const query = search.trim().toLowerCase();
+
+    return routeStatistics
+      .filter((route) =>
+        String(route.route_short_name || "")
+          .toLowerCase()
+          .includes(query) ||
+        String(route.route_long_name || "")
+          .toLowerCase()
+          .includes(query)
+      )
+      .slice(0, 20);
+  }, [routeStatistics, search]);
+
+  const routesWithPatterns =
+    routeStatistics.filter((route) => route.patternCount > 0).length;
+
+  const totalPatterns = trips.length;
+
+  if (loading) {
+    return (
+      <div className="empty-state">
+        Loading Mumbai BEST network statistics…
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="panel">
+        <h2>Unable to load network statistics</h2>
+        <p>{error}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="grid grid-2">
-      <div className="panel">
-        <h2>Bus Delays (minutes)</h2>
-        <BarChart labels={busLabels} values={busDelays} label="Delay (min)" color="#2563eb" />
+    <div>
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Mumbai BEST — Network Statistics</h2>
+        <p className="muted">
+          Statistics calculated from the integrated Mumbai
+          BEST route, stop and trip-pattern dataset.
+          These are static transport-network records,
+          not live vehicle telemetry.
+        </p>
       </div>
-      <div className="panel">
-        <h2>Route Availability</h2>
-        <DoughnutChart labels={Object.keys(routeStatusCounts)} values={Object.values(routeStatusCounts)} colors={["#2563eb", "#c81e3a"]} />
+
+      <div
+        className="grid grid-4"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="panel stat ok">
+          <div className="label">BEST ROUTES</div>
+          <div className="value">{routes.length}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">BUS STOPS</div>
+          <div className="value">
+            {stops.length.toLocaleString()}
+          </div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">TRIP PATTERNS</div>
+          <div className="value">{totalPatterns}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">ROUTES WITH PATTERNS</div>
+          <div className="value">{routesWithPatterns}</div>
+        </div>
       </div>
-      <div className="panel">
-        <h2>Network Link Status</h2>
-        <DoughnutChart labels={Object.keys(linkStatusCounts)} values={Object.values(linkStatusCounts)} colors={["#2563eb", "#e05d44", "#c81e3a"]} />
+
+      <div
+        className="grid grid-2"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="panel">
+          <h2>Routes With Most Stops</h2>
+
+          <p className="muted">
+            Top 10 BEST routes by the stop count
+            provided in the dataset.
+          </p>
+
+          {topRoutes.length > 0 ? (
+            <BarChart
+              labels={topRoutes.map(
+                (r) => r.route_short_name
+              )}
+              values={topRoutes.map(
+                (r) => r.stopCount
+              )}
+              label="Stops"
+              color="#2563eb"
+            />
+          ) : (
+            <div className="empty-state">
+              No route statistics available.
+            </div>
+          )}
+        </div>
+
+        <div className="panel">
+          <h2>Trip Pattern Coverage</h2>
+
+          <DoughnutChart
+            labels={[
+              "Routes with trip patterns",
+              "Routes without trip patterns"
+            ]}
+            values={[
+              routesWithPatterns,
+              routes.length - routesWithPatterns
+            ]}
+            colors={["#2563eb", "#cbd5e1"]}
+          />
+
+          <p
+            className="muted"
+            style={{ fontSize: 12, marginTop: 12 }}
+          >
+            This chart shows dataset coverage,
+            not live bus availability.
+          </p>
+        </div>
       </div>
+
+      <div
+        className="panel"
+        style={{ marginBottom: 16 }}
+      >
+        <h2>BEST Route Statistics Explorer</h2>
+
+        <p className="muted">
+          Search actual BEST route records and compare
+          their stop counts and trip-pattern coverage.
+        </p>
+
+        <input
+          type="text"
+          placeholder="Search BEST route number or name…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{
+            width: "100%",
+            padding: 12,
+            marginBottom: 16,
+            border: "1px solid #cbd5e1",
+            borderRadius: 8,
+            boxSizing: "border-box"
+          }}
+        />
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Route</th>
+                <th>Route Description</th>
+                <th>Stops</th>
+                <th>Trip Patterns</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {filteredRoutes.map((route) => (
+                <tr key={route.route_id}>
+                  <td>
+                    <strong>
+                      {route.route_short_name}
+                    </strong>
+                  </td>
+
+                  <td>
+                    {route.route_long_name || "—"}
+                  </td>
+
+                  <td>{route.stopCount}</td>
+                  <td>{route.patternCount}</td>
+                </tr>
+              ))}
+
+              {filteredRoutes.length === 0 && (
+                <tr>
+                  <td colSpan="4">
+                    No matching BEST routes found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <p
+          className="muted"
+          style={{ marginTop: 12, fontSize: 12 }}
+        >
+          Showing up to 20 matching routes.
+          Stop and trip-pattern counts come from
+          the integrated BEST dataset.
+        </p>
+      </div>
+
       <div className="panel">
-        <h2>Incidents by Type</h2>
-        {Object.keys(incidentTypeCounts).length === 0
-          ? <div className="empty-state">No incidents yet.</div>
-          : <BarChart labels={Object.keys(incidentTypeCounts)} values={Object.values(incidentTypeCounts)} label="Count" color="#e05d44" />}
+        <h2>Cisco Packet Tracer — Verified Network Results</h2>
+
+        <p className="muted">
+          These results were verified separately
+          using the Cisco Packet Tracer OSPF experiment.
+          They do not represent live BEST network health.
+        </p>
+
+        <div
+          className="grid grid-4"
+          style={{ marginTop: 16 }}
+        >
+          <div className="panel stat ok">
+            <div className="label">ROUTERS</div>
+            <div className="value">4</div>
+          </div>
+
+          <div className="panel stat ok">
+            <div className="label">SWITCHES</div>
+            <div className="value">2</div>
+          </div>
+
+          <div className="panel stat ok">
+            <div className="label">PACKET LOSS</div>
+            <div className="value">0%</div>
+          </div>
+
+          <div className="panel stat ok">
+            <div className="label">OSPF FAILOVER</div>
+            <div
+              className="value"
+              style={{ fontSize: 22 }}
+            >
+              VERIFIED
+            </div>
+          </div>
+        </div>
+
+        <h3 style={{ marginTop: 20 }}>
+          Automatic Rerouting Verification
+        </h3>
+
+        <div style={{ overflowX: "auto" }}>
+          <table>
+            <thead>
+              <tr>
+                <th>Network Condition</th>
+                <th>Selected Communication Path</th>
+                <th>Result</th>
+              </tr>
+            </thead>
+
+            <tbody>
+              <tr>
+                <td>Normal operation</td>
+                <td>GTW1 → PE → CORE → Server</td>
+                <td>
+                  <span className="pill ok">
+                    SUCCESS
+                  </span>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Primary link failure</td>
+                <td>GTW1 → GTW2 → CORE → Server</td>
+                <td>
+                  <span className="pill ok">
+                    REROUTED
+                  </span>
+                </td>
+              </tr>
+
+              <tr>
+                <td>Primary link restored</td>
+                <td>GTW1 → PE → CORE → Server</td>
+                <td>
+                  <span className="pill ok">
+                    RESTORED
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p
+          className="muted"
+          style={{ fontSize: 12, marginTop: 14 }}
+        >
+          Packet loss: 0% in the recorded
+          four-packet connectivity tests.
+          OSPF failover and restoration were
+          confirmed through traceroute.
+        </p>
       </div>
     </div>
   );
 }
+
 
 // ---------------------------------------------------------------------------
 // Protocol reference page
