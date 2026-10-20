@@ -2544,45 +2544,302 @@ function NetworkTopology() {
 // Incident Management
 // ---------------------------------------------------------------------------
 
+
 function IncidentManagement() {
-  const [incidents, , reload] = usePolling(Api.incidents, []);
-  const [resetting, setResetting] = useState(false);
+  const [disruptions, setDisruptions] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [refreshCount, setRefreshCount] = React.useState(0);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function loadIncidents() {
+      try {
+        setLoading(true);
+        setError("");
+
+        if (!window.BestRouting) {
+          throw new Error("BEST routing engine is unavailable.");
+        }
+
+        await window.BestRouting.load();
+
+        const result = window.BestRouting.getDisruptions();
+
+        if (!cancelled) {
+          const items = Array.isArray(result)
+            ? result
+            : [
+                ...(result?.stops || []).map((item) => ({
+                  ...item,
+                  disruptionKind: "stop"
+                })),
+                ...(result?.connections || []).map((item) => ({
+                  ...item,
+                  disruptionKind: "connection"
+                }))
+              ];
+
+          setDisruptions(items);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setError(err.message || "Unable to load incidents.");
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    loadIncidents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [refreshCount]);
+
+  const refresh = () => {
+    setRefreshCount((value) => value + 1);
+  };
+
+  const resetIncidents = async () => {
+    if (!window.confirm(
+      "Clear all simulated BEST route disruptions?"
+    )) {
+      return;
+    }
+
+    try {
+      setBusy(true);
+      window.BestRouting.reset();
+      refresh();
+    } catch (err) {
+      setError(err.message || "Unable to reset disruptions.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const restoreIncident = async (item) => {
+    try {
+      setBusy(true);
+
+      if (item.disruptionKind === "stop") {
+        window.BestRouting.restoreStop(
+          item.stop_id || item.stopId || item.id
+        );
+      } else if (item.disruptionKind === "connection") {
+        window.BestRouting.restoreConnection(
+          item.from_stop_id || item.from,
+          item.to_stop_id || item.to
+        );
+      } else {
+        throw new Error(
+          "Unable to identify this disruption type."
+        );
+      }
+
+      refresh();
+    } catch (err) {
+      setError(err.message || "Unable to restore disruption.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const stopIncidents = disruptions.filter(
+    (item) => item.disruptionKind === "stop"
+  );
+
+  const connectionIncidents = disruptions.filter(
+    (item) => item.disruptionKind === "connection"
+  );
 
   return (
     <div>
       <div className="panel" style={{ marginBottom: 16 }}>
-        <h2>Simulation Mode</h2>
-        <p className="muted" style={{ fontSize: 12.5 }}>
-          Use Route Management to simulate a flood or accident on a road
-          segment, and Network Topology to simulate a network link failure.
-          Reset restores the full sample dataset.
+        <h2>BEST Incident Management</h2>
+
+        <p className="muted">
+          Monitor and resolve simulated road disruptions
+          affecting Mumbai BEST route calculations.
+          Incidents shown here are simulation events,
+          not live reports from BEST authorities.
         </p>
-        <div className="controls-row">
-          <button className="btn danger" disabled={resetting}
-            onClick={async () => { setResetting(true); await Api.resetSimulation(); setResetting(false); reload(); }}>
-            Reset Simulation
+      </div>
+
+      <div
+        className="grid grid-4"
+        style={{ marginBottom: 16 }}
+      >
+        <div className="panel stat">
+          <div className="label">ACTIVE INCIDENTS</div>
+          <div className="value">{disruptions.length}</div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">BLOCKED STOPS</div>
+          <div className="value">{stopIncidents.length}</div>
+        </div>
+
+        <div className="panel stat">
+          <div className="label">BLOCKED CONNECTIONS</div>
+          <div className="value">{connectionIncidents.length}</div>
+        </div>
+
+        <div className="panel stat ok">
+          <div className="label">MODE</div>
+          <div
+            className="value"
+            style={{ fontSize: 22 }}
+          >
+            SIMULATION
+          </div>
+        </div>
+      </div>
+
+      <div className="panel" style={{ marginBottom: 16 }}>
+        <h2>Simulation Controls</h2>
+
+        <p className="muted">
+          Use Route Management to block a BEST stop
+          or connection. Return here to inspect
+          active disruptions and restore them.
+        </p>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            marginTop: 14
+          }}
+        >
+          <button
+            className="btn"
+            onClick={refresh}
+            disabled={busy}
+          >
+            Refresh Incidents
+          </button>
+
+          <button
+            className="btn danger"
+            onClick={resetIncidents}
+            disabled={busy || disruptions.length === 0}
+          >
+            Reset All Disruptions
           </button>
         </div>
       </div>
+
       <div className="panel">
-        <h2>Incident Log</h2>
-        <table>
-          <thead><tr><th>Type</th><th>Route/Link</th><th>Description</th><th>Status</th><th>Reported</th></tr></thead>
-          <tbody>
-            {(incidents || []).map((inc, i) => (
-              <tr key={i}>
-                <td>{inc.incident_type.replace("_", " ")}</td>
-                <td>{inc.route_id || inc.link_id || "—"}</td>
-                <td style={{ fontFamily: "var(--sans)" }}>{inc.description}</td>
-                <td><span className={statusPillClass(inc.status === "active" ? "warning" : "operational")}>{inc.status}</span></td>
-                <td>{timeAgo(inc.created_at)}</td>
-              </tr>
-            ))}
-            {(!incidents || incidents.length === 0) && (
-              <tr><td colSpan="5" className="empty-state">No incidents logged.</td></tr>
-            )}
-          </tbody>
-        </table>
+        <h2>Active Incident Log</h2>
+
+        {error && (
+          <p style={{ color: "#b91c1c" }}>
+            {error}
+          </p>
+        )}
+
+        {loading ? (
+          <div className="empty-state">
+            Loading simulated disruptions…
+          </div>
+        ) : disruptions.length === 0 ? (
+          <div className="empty-state">
+            No active BEST route disruptions.
+
+            <p>
+              Simulate an accident, flood or blocked
+              stop in Route Management, then return
+              here and click Refresh Incidents.
+            </p>
+          </div>
+        ) : (
+          <div style={{ overflowX: "auto" }}>
+            <table>
+              <thead>
+                <tr>
+                  <th>Type</th>
+                  <th>Affected Stop / Connection</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {disruptions.map((item, index) => {
+                  const isStop =
+                    item.disruptionKind === "stop";
+
+                  const description = isStop
+                    ? (
+                        item.stop_name ||
+                        item.stop_id ||
+                        item.stopId ||
+                        item.id ||
+                        "Blocked stop"
+                      )
+                    : (
+                        String(
+                          item.from_stop_id ||
+                          item.from ||
+                          "?"
+                        ) +
+                        " → " +
+                        String(
+                          item.to_stop_id ||
+                          item.to ||
+                          "?"
+                        )
+                      );
+
+                  return (
+                    <tr key={index}>
+                      <td>
+                        {isStop
+                          ? "Blocked Stop"
+                          : "Blocked Connection"}
+                      </td>
+
+                      <td>{description}</td>
+
+                      <td>
+                        <span
+                          style={{
+                            background: "#fef3c7",
+                            color: "#92400e",
+                            padding: "5px 10px",
+                            borderRadius: 20,
+                            fontSize: 12,
+                            fontWeight: 600
+                          }}
+                        >
+                          ACTIVE
+                        </span>
+                      </td>
+
+                      <td>
+                        <button
+                          className="btn"
+                          disabled={busy}
+                          onClick={() =>
+                            restoreIncident(item)
+                          }
+                        >
+                          Resolve
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
