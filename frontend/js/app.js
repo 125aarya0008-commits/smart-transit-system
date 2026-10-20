@@ -2347,6 +2347,101 @@ function NetworkTopology() {
       </div>
     </div>
   </div>
+          
+<div className="panel" style={{ marginTop: 16 }}>
+  <h2>Cisco Packet Tracer — Experiment Evidence Gallery</h2>
+
+  <p className="muted">
+    Actual simulation screenshots demonstrating network
+    topology, OSPF routing, automatic failover and
+    routing-table verification.
+  </p>
+
+  <div
+    className="grid grid-2"
+    style={{ marginTop: 18, gap: 18 }}
+  >
+    {[
+      {
+        title: "1. Network Topology",
+        image: "assets/packet-tracer/01-network-topology.png",
+        description:
+          "Complete hybrid star and partial-mesh topology with four Cisco 2911 routers, two switches, two PCs and one server."
+      },
+      {
+        title: "2. Primary Communication Route",
+        image: "assets/packet-tracer/02-primary-route.png",
+        description:
+          "Traceroute confirming the primary OSPF path: GTW1 → PE → CORE → Server."
+      },
+      {
+        title: "3. Automatic OSPF Rerouting",
+        image: "assets/packet-tracer/03-automatic-rerouting.png",
+        description:
+          "After primary link failure, OSPF automatically selects GTW1 → GTW2 → CORE → Server."
+      },
+      {
+        title: "4. OSPF Routing Verification",
+        image: "assets/packet-tracer/04-ospf-verification.png",
+        description:
+          "OSPF neighbor relationships and routing table verification in Cisco Packet Tracer."
+      }
+    ].map((item, index) => (
+      <div
+        key={index}
+        style={{
+          border: "1px solid #e2e8f0",
+          borderRadius: 12,
+          padding: 14,
+          background: "#ffffff"
+        }}
+      >
+        <h3 style={{ marginBottom: 12 }}>
+          {item.title}
+        </h3>
+
+        <a
+          href={item.image}
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <img
+            src={item.image}
+            alt={item.title}
+            loading="lazy"
+            style={{
+              width: "100%",
+              height: 240,
+              objectFit: "contain",
+              background: "#f8fafc",
+              borderRadius: 8,
+              border: "1px solid #e2e8f0"
+            }}
+          />
+        </a>
+
+        <p
+          className="muted"
+          style={{
+            marginTop: 12,
+            fontSize: 13,
+            lineHeight: 1.6
+          }}
+        >
+          {item.description}
+        </p>
+      </div>
+    ))}
+  </div>
+
+  <p className="muted" style={{
+    marginTop: 16,
+    fontSize: 12
+  }}>
+    Click any screenshot to view the full-size
+    Cisco Packet Tracer experiment evidence.
+  </p>
+</div>
 
   <h3 style={{ marginTop: 20 }}>Routing Test Results</h3>
 
